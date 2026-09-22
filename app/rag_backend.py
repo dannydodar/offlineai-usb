@@ -22,6 +22,11 @@ CONVERSATIONAL_MESSAGES = {
     "who are you", "what can you do", "help", "good morning", "good afternoon",
     "good evening", "what is this", "how does this work", "nice to meet you",
 }
+LIBRARY_REQUEST_TERMS = {
+    "pdf", "pdfs", "book", "books", "manual", "manuals", "guide", "guides",
+    "document", "documents", "library", "libraries", "source", "sources",
+    "reference", "references", "according",
+}
 
 
 def _quote_ident(value: str) -> str:
@@ -40,7 +45,9 @@ def retrieval_decision(message: str) -> tuple[bool, str]:
         return False, "short conversational message"
     if normalized.startswith(("can you help", "could you help", "tell me about yourself")) and len(normalized.split()) <= 8:
         return False, "general conversational message"
-    return True, "purposeful information intent"
+    if not any(term in normalized.split() for term in LIBRARY_REQUEST_TERMS) and not any(phrase in normalized for phrase in ("look up in", "search the collection", "search my collection", "what do the documents say", "what do the books say")):
+        return False, "no explicit library request"
+    return True, "explicit library request"
 
 
 def load_model_registry() -> dict[str, Any]:

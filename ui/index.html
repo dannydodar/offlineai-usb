@@ -30,7 +30,7 @@
       </details>
       <details class="setting-block">
         <summary class="setting-title">PDF library</summary>
-        <p class="setting-help">When enabled, the assistant searches the local PDFs only when your question needs factual resources. A greeting or casual chat does not search anything. It only sends a small number of relevant excerpts to the AI.</p>
+        <p class="setting-help">When enabled, the assistant searches the local PDFs only when you explicitly mention PDFs, books, manuals, documents, sources, or ask it to look something up in the library. Ordinary questions do not search anything.</p>
         <label class="setting-toggle"><input id="libraryToggle" type="checkbox" checked> Allow helpful PDF searches</label>
         <label class="setting-field">Maximum source excerpts <span class="setting-hint">How many small pieces of PDFs may be used for one answer</span><input id="retrievalLimit" type="number" min="0" step="1"></label>
       </details>
@@ -65,7 +65,7 @@
       <textarea id="prompt" rows="3" placeholder="Ask the local assistant anything…" required></textarea>
       <div class="quick-controls" aria-label="Simple chat controls">
         <label class="quick-toggle"><input id="thinkingToggle" type="checkbox" checked> Thinking</label>
-        <label class="quick-toggle"><input id="libraryToggleQuick" type="checkbox" checked> Use PDF library when useful</label>
+        <label class="quick-toggle"><input id="libraryToggleQuick" type="checkbox" checked> Use PDF library when asked</label>
         <span id="modelQuickLabel" class="quick-model" aria-live="polite">Local model</span>
       </div>
       <div class="context-meter" aria-label="Estimated context usage"><div class="meter-track"><span id="contextBar"></span></div><span id="contextText">Context: 0 / 0 tokens (0%)</span></div>
