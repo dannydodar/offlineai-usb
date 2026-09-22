@@ -44,6 +44,10 @@ def _registry() -> list[dict[str, Any]]:
     return [dict(item) for item in data.get("models", [])]
 
 
+def _is_allowed(model_id: str) -> bool:
+    return os.getenv("OFFLINEAI_MODEL_POLICY", "").strip().lower() != "lightweight" or model_id == "qwen/qwen3-0.6b"
+
+
 def _model_path(item: dict[str, Any]) -> Path:
     relative = Path(str(item.get("local_model_file", "")))
     if relative.is_absolute():
@@ -75,11 +79,13 @@ def inventory() -> list[dict[str, Any]]:
         installed = path.is_file()
         model_id = str(item.get("id", ""))
         running = model_id == running_model
+        allowed = _is_allowed(model_id)
         result.append({
             "id": model_id,
             "label": str(item.get("label", item.get("id", ""))),
             "installed": installed,
             "available": installed,
+            "allowed": allowed,
             "active": model_id == active,
             "running": running,
             "can_delete": installed and model_id != active and not running,

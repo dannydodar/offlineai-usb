@@ -36,7 +36,8 @@ def _restart_launcher() -> None:
     if not launcher.is_file():
         raise RuntimeError("portable launcher not found; restart OfflineAI manually")
     active = os.getenv("OFFLINEAI_ACTIVE_MODEL", "")
-    model = {"google/gemma-4-e2b": "e2b", "google/gemma-4-e4b": "e4b", "qwen/qwen3-0.6b": "qwen3"}.get(active, "auto")
+    lightweight_only = os.getenv("OFFLINEAI_MODEL_POLICY", "").strip().lower() == "lightweight"
+    model = {"google/gemma-4-e2b": "e2b", "google/gemma-4-e4b": "e4b", "qwen/qwen3-0.6b": "qwen3"}.get(active, "qwen3" if lightweight_only else "auto")
     try:
         launcher_text = launcher.read_text(encoding="utf-8", errors="ignore")
     except OSError:
@@ -46,7 +47,7 @@ def _restart_launcher() -> None:
     if model == "auto" and not supports_auto:
         model = "e2b"
     if model == "qwen3" and not supports_qwen:
-        model = "e2b"
+        raise RuntimeError("the USB launcher is too old to restart lightweight mode; install the latest update and relaunch OfflineAI")
     port = os.getenv("OFFLINEAI_PORT", "8765")
     command = ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(launcher), "-Model", model, "-Port", port]
     flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
@@ -132,6 +133,7 @@ class Handler(BaseHTTPRequestHandler):
             config["system_prompt"] = load_system_prompt()
             config["engine"] = os.getenv("OFFLINEAI_ENGINE", "LM Studio API")
             config["version"] = __import__("update_manager").current_version()
+            config["model_policy"] = os.getenv("OFFLINEAI_MODEL_POLICY", "normal")
             config["hardware"] = hardware_profile([item.get("id", "") for item in config.get("models", [])])
             config["downloadable_models"] = model_download_catalog()
             config["runtime"] = runtime_status()
@@ -180,6 +182,10 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 if not (ROOT / "start_usb.ps1").is_file():
                     raise RuntimeError("portable launcher not found; restart OfflineAI manually")
+                if os.getenv("OFFLINEAI_MODEL_POLICY", "").strip().lower() == "lightweight":
+                    launcher_text = (ROOT / "start_usb.ps1").read_text(encoding="utf-8", errors="ignore")
+                    if "qwen3" not in launcher_text:
+                        raise RuntimeError("the USB launcher is too old to restart lightweight mode; install the latest update and relaunch OfflineAI")
                 self._send(200, {"ok": True, "restartRequired": True, "message": "OfflineAI is restarting. This page will refresh shortly."})
                 threading.Timer(0.8, _restart_launcher).start()
             except (OSError, RuntimeError) as exc:

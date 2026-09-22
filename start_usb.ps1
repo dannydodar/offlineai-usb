@@ -1,6 +1,6 @@
 param(
     [ValidateSet('auto','e2b','e4b','qwen3')]
-    [string]$Model = 'auto',
+    [string]$Model = 'qwen3',
     [int]$Port = 8765,
     [switch]$NoOffload
 )
@@ -23,7 +23,10 @@ if ($Model -eq 'auto') {
     $qwenUsbCandidate = Join-Path (Join-Path $Root 'models') 'qwen3-0.6b\Qwen3-0.6B-Q4_0.gguf'
     $qwenPcCandidate = Join-Path (Join-Path $env:LOCALAPPDATA 'OfflineAI\models') 'qwen3-0.6b\Qwen3-0.6B-Q4_0.gguf'
     $hasQwen = (Test-Path -LiteralPath $qwenUsbCandidate) -or (Test-Path -LiteralPath $qwenPcCandidate)
-    $Model = if ($lowResource -and $hasQwen) { 'qwen3' } else { 'e2b' }
+    if (-not $hasQwen) {
+        throw 'Lightweight-only mode is enabled, but Qwen3 0.6B is not installed. Use the model download option or explicitly start with -Model e2b temporarily.'
+    }
+    $Model = 'qwen3'
 }
 $modelName = switch ($Model) {
     'e4b' { 'gemma-4-E4B-it-GGUF\gemma-4-E4B-it-Q4_K_M.gguf' }
@@ -46,7 +49,12 @@ if ((-not (Test-Path -LiteralPath $usbModelPath)) -and (Test-Path -LiteralPath $
     $modelFolderForBackend = $pcModelRoot
     $modelLocation = 'PC cache'
 }
-if (-not (Test-Path -LiteralPath $modelPath)) { throw "Selected model not found on the USB or PC cache: $modelName" }
+if (-not (Test-Path -LiteralPath $modelPath)) {
+    if ($Model -eq 'qwen3') {
+        throw "Lightweight mode requires Qwen3 0.6B, but it is not installed. Use the model download option or explicitly start with -Model e2b temporarily."
+    }
+    throw "Selected model not found on the USB or PC cache: $modelName"
+}
 if ((-not $NoOffload) -and ($modelLocation -ne 'PC cache')) {
     try {
         & (Join-Path $Root 'offload_models.ps1') -Model $Model
@@ -134,6 +142,7 @@ $env:OFFLINEAI_PDF_ROOT = $pdfRoot
 $env:OFFLINEAI_LM_BASE = "http://127.0.0.1:$runnerPort/v1"
 $env:OFFLINEAI_ENGINE = "llama.cpp CPU (independent, $Model; model on $modelLocation)"
 $env:OFFLINEAI_ACTIVE_MODEL = $modelAlias
+$env:OFFLINEAI_MODEL_POLICY = if ($Model -eq 'qwen3') { 'lightweight' } else { 'normal' }
 $env:OFFLINEAI_MODEL_FOLDER = $modelFolderForBackend
 $backend = Start-Process -FilePath $Python -ArgumentList @('-u', (Join-Path $Root 'app\server.py')) -WorkingDirectory $Root -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDir 'usb-backend.out.log') -RedirectStandardError (Join-Path $logDir 'usb-backend.err.log')
 Set-Content -LiteralPath $backendPidFile -Value $backend.Id -Encoding ascii

@@ -14,6 +14,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent
 DEFAULT_MODEL = "google/gemma-4-e2b"
 E4B_MODEL = "google/gemma-4-e4b"
+LIGHTWEIGHT_MODEL = "qwen/qwen3-0.6b"
 LM_BASE = os.getenv("OFFLINEAI_LM_BASE", "http://127.0.0.1:1234/v1").rstrip("/")
 DEFAULT_DB = Path(os.getenv("OFFLINEAI_DB_PATH", str(ROOT.parent / "data" / "documents.db")))
 MAX_CONTEXT_CHARS = int(os.getenv("OFFLINEAI_MAX_CONTEXT_CHARS", "9000"))
@@ -87,13 +88,14 @@ def hardware_profile(available_model_ids: list[str] | None = None) -> dict[str, 
                 "thinking": False,
             },
         }
+    preferred = LIGHTWEIGHT_MODEL if os.getenv("OFFLINEAI_MODEL_POLICY", "").strip().lower() == "lightweight" and LIGHTWEIGHT_MODEL in available else (active_model if active_model in available else DEFAULT_MODEL)
     return {
         "id": "standard",
         "label": "Standard mode",
         "message": "The computer appears suitable for the normal OfflineAI settings.",
         "total_memory_gb": round(memory_gb, 1) if memory_gb else None,
         "logical_processors": logical_processors,
-        "recommended_model": active_model if active_model in available else DEFAULT_MODEL,
+        "recommended_model": preferred,
         "parameters": {
             "temperature": 0.2,
             "topP": 0.9,
@@ -133,6 +135,8 @@ def load_model_registry() -> dict[str, Any]:
         models = []
         for item in data.get("models", []):
             model = dict(item)
+            if os.getenv("OFFLINEAI_MODEL_POLICY", "").strip().lower() == "lightweight" and model.get("id") != LIGHTWEIGHT_MODEL:
+                continue
             local_file = Path(str(model.get("local_model_file", "")))
             resolved = local_file if local_file.is_absolute() else MODEL_FOLDER / local_file
             model["local_path"] = str(resolved)

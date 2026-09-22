@@ -231,13 +231,13 @@
     Object.entries(els.parameterInputs).forEach(([key, input]) => { if (parameters[key] !== undefined) input.value = parameters[key]; });
     els.systemPrompt.textContent = state.config.systemPrompt || 'Configured by local backend.';
     if (els.modelFolder && state.config.folder) els.modelFolder.textContent = `Models: ${state.config.folder}`;
-   if (els.engineLabel && state.config.engine) els.engineLabel.textContent = `Engine: ${state.config.engine}${state.config.version ? ` · software v${state.config.version}` : ''}`;
     if (els.engineLabel && state.config.engine) {
       const runtime = state.config.runtime || {};
       const runnerLabel = runtime.checked
         ? (runtime.running ? ` · runner running${runtime.model ? ` (${runtime.model})` : ''}` : ' · runner not responding')
         : '';
-      els.engineLabel.textContent = `Engine: ${state.config.engine}${state.config.version ? ` · software v${state.config.version}` : ''}${runnerLabel}`;
+      const policyLabel = state.config.model_policy === 'lightweight' ? ' · lightweight only' : '';
+      els.engineLabel.textContent = `Engine: ${state.config.engine}${state.config.version ? ` · software v${state.config.version}` : ''}${policyLabel}${runnerLabel}`;
     }
     if (els.hardwareNotice && hardware.id === 'low-resource') {
       els.hardwareNotice.textContent = `${hardware.label}: ${hardware.message} Thinking remains available, but is off by default to save time and memory.`;
@@ -362,7 +362,7 @@
         title.textContent = model.label || model.id;
         const meta = document.createElement('div');
         meta.className = `model-row-meta ${model.running ? 'model-active' : (model.installed ? '' : 'model-missing')}`;
-        const stateLabel = model.running ? 'Running' : (model.active ? 'Selected · restart needed' : (model.installed ? 'Installed' : 'Not installed'));
+        const stateLabel = model.running ? 'Running' : (!model.allowed ? 'Disabled · lightweight mode' : (model.active ? 'Selected · restart needed' : (model.installed ? 'Installed' : 'Not installed')));
         meta.textContent = `${stateLabel} · ${formatBytes(model.size_bytes)} · ${model.location || 'model folder'}`;
         info.append(title, meta);
         row.appendChild(info);

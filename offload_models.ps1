@@ -1,6 +1,6 @@
 param(
     [ValidateSet('e2b','e4b','qwen3','all')]
-    [string]$Model = 'e2b',
+    [string]$Model = 'qwen3',
     [string]$Destination = ''
 )
 $ErrorActionPreference = 'Stop'
