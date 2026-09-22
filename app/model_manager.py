@@ -2,11 +2,41 @@ from __future__ import annotations
 
 import json
 import os
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 MODEL_FOLDER = Path(os.getenv("OFFLINEAI_MODEL_FOLDER", str(ROOT / "models")))
+
+
+def runtime_status() -> dict[str, Any]:
+    """Inspect the local model runner instead of trusting stale environment flags."""
+    base_url = os.getenv("OFFLINEAI_LM_BASE", "").strip().rstrip("/")
+    if not base_url:
+        return {"checked": False, "running": False, "model": "", "endpoint": ""}
+    runner_url = base_url[:-3] if base_url.endswith("/v1") else base_url
+    result: dict[str, Any] = {
+        "checked": True,
+        "running": False,
+        "model": "",
+        "endpoint": runner_url,
+    }
+    try:
+        request = urllib.request.Request(runner_url + "/health", headers={"User-Agent": "OfflineAI/1.0"})
+        with urllib.request.urlopen(request, timeout=1.0) as response:
+            result["health"] = json.loads(response.read().decode("utf-8"))
+        request = urllib.request.Request(base_url + "/models", headers={"User-Agent": "OfflineAI/1.0"})
+        with urllib.request.urlopen(request, timeout=1.0) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        models = payload.get("data", []) if isinstance(payload, dict) else []
+        if models and isinstance(models[0], dict):
+            result["model"] = str(models[0].get("id", ""))
+        result["running"] = True
+    except (OSError, urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
+        result["error"] = str(exc)
+    return result
 
 
 def _registry() -> list[dict[str, Any]]:
@@ -26,7 +56,11 @@ def _model_path(item: dict[str, Any]) -> Path:
 
 
 def inventory() -> list[dict[str, Any]]:
+    runtime = runtime_status()
     active = os.getenv("OFFLINEAI_ACTIVE_MODEL", "").strip()
+    running_model = str(runtime.get("model", ""))
+    if not active and running_model:
+        active = running_model
     result = []
     for item in _registry():
         path = _model_path(item)
@@ -39,15 +73,20 @@ def inventory() -> list[dict[str, Any]]:
                     managed_files.append(candidate.name)
                     total_bytes += candidate.stat().st_size
         installed = path.is_file()
+        model_id = str(item.get("id", ""))
+        running = model_id == running_model
         result.append({
-            "id": str(item.get("id", "")),
+            "id": model_id,
             "label": str(item.get("label", item.get("id", ""))),
             "installed": installed,
-            "active": str(item.get("id", "")) == active,
-            "can_delete": installed and str(item.get("id", "")) != active,
+            "available": installed,
+            "active": model_id == active,
+            "running": running,
+            "can_delete": installed and model_id != active and not running,
             "size_bytes": total_bytes,
             "files": managed_files,
             "location": str(folder),
+            "path": str(path),
         })
     return result
 
@@ -58,8 +97,10 @@ def delete_model(model_id: str) -> dict[str, Any]:
     if item is None:
         raise ValueError("that model is not managed by OfflineAI")
     active = os.getenv("OFFLINEAI_ACTIVE_MODEL", "").strip()
-    if requested == active:
-        raise RuntimeError("the active model cannot be deleted while OfflineAI is running")
+    runtime = runtime_status()
+    running_model = str(runtime.get("model", ""))
+    if requested == active or requested == running_model:
+        raise RuntimeError("the active or running model cannot be deleted while OfflineAI is running")
     path = _model_path(item)
     folder = path.parent
     root = MODEL_FOLDER.resolve()

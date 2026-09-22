@@ -231,7 +231,14 @@
     Object.entries(els.parameterInputs).forEach(([key, input]) => { if (parameters[key] !== undefined) input.value = parameters[key]; });
     els.systemPrompt.textContent = state.config.systemPrompt || 'Configured by local backend.';
     if (els.modelFolder && state.config.folder) els.modelFolder.textContent = `Models: ${state.config.folder}`;
-    if (els.engineLabel && state.config.engine) els.engineLabel.textContent = `Engine: ${state.config.engine}${state.config.version ? ` · software v${state.config.version}` : ''}`;
+   if (els.engineLabel && state.config.engine) els.engineLabel.textContent = `Engine: ${state.config.engine}${state.config.version ? ` · software v${state.config.version}` : ''}`;
+    if (els.engineLabel && state.config.engine) {
+      const runtime = state.config.runtime || {};
+      const runnerLabel = runtime.checked
+        ? (runtime.running ? ` · runner running${runtime.model ? ` (${runtime.model})` : ''}` : ' · runner not responding')
+        : '';
+      els.engineLabel.textContent = `Engine: ${state.config.engine}${state.config.version ? ` · software v${state.config.version}` : ''}${runnerLabel}`;
+    }
     if (els.hardwareNotice && hardware.id === 'low-resource') {
       els.hardwareNotice.textContent = `${hardware.label}: ${hardware.message} Thinking remains available, but is off by default to save time and memory.`;
       els.hardwareNotice.hidden = false;
@@ -354,8 +361,8 @@
         title.className = 'model-row-title';
         title.textContent = model.label || model.id;
         const meta = document.createElement('div');
-        meta.className = `model-row-meta ${model.active ? 'model-active' : (model.installed ? '' : 'model-missing')}`;
-        const stateLabel = model.active ? 'Active' : (model.installed ? 'Installed' : 'Not installed');
+        meta.className = `model-row-meta ${model.running ? 'model-active' : (model.installed ? '' : 'model-missing')}`;
+        const stateLabel = model.running ? 'Running' : (model.active ? 'Selected · restart needed' : (model.installed ? 'Installed' : 'Not installed'));
         meta.textContent = `${stateLabel} · ${formatBytes(model.size_bytes)} · ${model.location || 'model folder'}`;
         info.append(title, meta);
         row.appendChild(info);
@@ -363,8 +370,8 @@
           const button = document.createElement('button');
           button.type = 'button';
           button.className = 'button secondary';
-          const canDelete = Boolean(model.can_delete) && !model.active;
-          button.textContent = model.active ? 'In use' : (canDelete ? 'Delete' : 'Managed');
+          const canDelete = Boolean(model.can_delete) && !model.active && !model.running;
+          button.textContent = model.running ? 'Running' : (model.active ? 'Selected' : (canDelete ? 'Delete' : 'Managed'));
           button.disabled = !canDelete;
           if (canDelete) button.addEventListener('click', () => deleteModel(model));
           row.appendChild(button);
@@ -521,10 +528,33 @@
   async function restartOfflineAI() {
     if (!els.restartButton) return;
     els.restartButton.disabled = true;
-    els.updateStatus.textContent = 'Restarting OfflineAI…';
+    els.updateStatus.textContent = 'Stopping the AI runner and restarting OfflineAI…';
     try {
+      let previousInstance = '';
+      try {
+        const before = await request(endpoint('/api/health'));
+        previousInstance = before.instance_id || '';
+      } catch (_) {}
       await request(endpoint('/api/restart'), { method: 'POST', body: '{}' });
-      window.setTimeout(() => window.location.reload(), 4000);
+      const deadline = Date.now() + 195000;
+      let sawServiceStop = false;
+      while (Date.now() < deadline) {
+        await new Promise(resolve => window.setTimeout(resolve, 1000));
+        try {
+          const health = await request(endpoint('/api/health'));
+          if (!previousInstance || health.instance_id !== previousInstance) {
+            els.updateStatus.textContent = 'OfflineAI restarted successfully. Refreshing…';
+            window.setTimeout(() => window.location.reload(), 500);
+            return;
+          }
+        } catch (_) {
+          sawServiceStop = true;
+          els.updateStatus.textContent = 'OfflineAI is restarting… waiting for the new service…';
+        }
+      }
+      throw new Error(sawServiceStop
+        ? 'the old service stopped but the new service did not become ready'
+        : 'the old service did not shut down');
     } catch (error) {
       els.restartButton.disabled = false;
       els.updateStatus.textContent = `Restart failed: ${error.message}. Close and start OfflineAI again.`;

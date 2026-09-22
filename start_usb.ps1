@@ -63,6 +63,15 @@ if ((-not $NoOffload) -and ($modelLocation -ne 'PC cache')) {
 }
 $pdfRoot = Join-Path $driveRoot 'PDF'
 if (-not (Test-Path -LiteralPath $pdfRoot)) { throw "PDF library not found at $pdfRoot" }
+
+# Stop the old backend and llama.cpp process before checking ports or starting
+# replacements. This also cleans orphaned processes left by an interrupted
+# restart, while only matching processes owned by this OfflineAI folder.
+$stopScript = Join-Path $Root 'stop_usb.ps1'
+if (Test-Path -LiteralPath $stopScript) {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stopScript -Quiet
+}
+
 $logDir = Join-Path $Root 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $runnerPidFile = Join-Path $logDir 'usb-runner.pid'
@@ -84,13 +93,6 @@ function Test-PortAvailable([int]$Candidate) {
     }
 }
 
-foreach ($pidFile in $runnerPidFile,$backendPidFile) {
-    if (Test-Path -LiteralPath $pidFile) {
-        Stop-Process -Id ([int](Get-Content -Raw -LiteralPath $pidFile)) -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
-    }
-}
-
 $requestedPort = $Port
 if (-not (Test-PortAvailable $Port)) {
     $fallbackPort = 8775..8790 | Where-Object { Test-PortAvailable $_ } | Select-Object -First 1
@@ -109,7 +111,21 @@ for ($i=0; $i -lt 180; $i++) {
     try { $health = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$runnerPort/health" -TimeoutSec 2; if ($health.StatusCode -eq 200) { $ready = $true; break } } catch { }
     Start-Sleep -Seconds 1
 }
-if (-not $ready) { throw 'Portable llama.cpp runner did not become healthy within 180 seconds.' }
+if (-not $ready) {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stopScript -Quiet
+    throw 'Portable llama.cpp runner did not become healthy within 180 seconds.'
+}
+try {
+    $runnerModels = Invoke-RestMethod -Uri "http://127.0.0.1:$runnerPort/v1/models" -TimeoutSec 3
+    $runnerIds = @($runnerModels.data | ForEach-Object { [string]$_.id })
+    if ($runnerIds.Count -gt 0 -and $runnerIds -notcontains $modelAlias) {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stopScript -Quiet
+        throw "Portable runner loaded an unexpected model: $($runnerIds -join ', ')"
+    }
+} catch {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stopScript -Quiet
+    throw "Portable llama.cpp model check failed: $($_.Exception.Message)"
+}
 
 $env:OFFLINEAI_HOST = $hostAddress
 $env:OFFLINEAI_PORT = [string]$Port
@@ -121,7 +137,17 @@ $env:OFFLINEAI_ACTIVE_MODEL = $modelAlias
 $env:OFFLINEAI_MODEL_FOLDER = $modelFolderForBackend
 $backend = Start-Process -FilePath $Python -ArgumentList @('-u', (Join-Path $Root 'app\server.py')) -WorkingDirectory $Root -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDir 'usb-backend.out.log') -RedirectStandardError (Join-Path $logDir 'usb-backend.err.log')
 Set-Content -LiteralPath $backendPidFile -Value $backend.Id -Encoding ascii
-Start-Sleep -Milliseconds 800
-try { Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$Port/api/health" -TimeoutSec 5 | Out-Null } catch { throw 'Portable OfflineAI backend did not become healthy.' }
+$backendReady = $false
+for ($i = 0; $i -lt 45; $i++) {
+    try {
+        $health = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/health" -TimeoutSec 2
+        if ($health.ok -and $health.active_model -eq $modelAlias) { $backendReady = $true; break }
+    } catch { }
+    Start-Sleep -Seconds 1
+}
+if (-not $backendReady) {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stopScript -Quiet
+    throw 'Portable OfflineAI backend did not become healthy with the selected model.'
+}
 Start-Process "http://127.0.0.1:$Port/"
 Write-Output "Portable OfflineAI started at http://127.0.0.1:$Port/ using $Model through independent llama.cpp; model source: $modelLocation."
