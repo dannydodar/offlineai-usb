@@ -311,11 +311,38 @@
   async function loadModelInventory() {
     if (!els.modelList) return;
     try {
-      const body = await request(endpoint('/api/models/manage'));
+      let body;
+      let compatibilityMode = false;
+      try {
+        body = await request(endpoint('/api/models/manage'));
+      } catch (error) {
+        // A newer UI can briefly be paired with an older backend while an
+        // update is waiting for a restart. Keep the settings page useful by
+        // falling back to the older read-only model endpoint.
+        if (!/HTTP 404|not found/i.test(error.message)) throw error;
+        const legacy = await request(endpoint('/api/models'));
+        const selected = els.model ? els.model.value : '';
+        const available = Array.isArray(legacy.models) ? legacy.models : [];
+        body = {
+          models: available.map(model => ({
+            id: modelId(model),
+            label: model.label || modelId(model),
+            installed: true,
+            active: modelId(model) === selected,
+            can_delete: false,
+            size_bytes: 0,
+            location: legacy.folder || 'model folder'
+          }))
+        };
+        compatibilityMode = true;
+      }
       els.modelList.innerHTML = '';
       const models = body.models || [];
       if (!models.length) {
         els.modelList.innerHTML = '<div class="model-row-meta">No configured models found.</div>';
+        if (els.modelManagerStatus) els.modelManagerStatus.textContent = compatibilityMode
+          ? 'The older backend can report no installed models. Relaunch OfflineAI after updating to refresh this list.'
+          : '';
         return;
       }
       models.forEach(model => {
@@ -336,17 +363,19 @@
           const button = document.createElement('button');
           button.type = 'button';
           button.className = 'button secondary';
-          button.textContent = model.active ? 'In use' : 'Delete';
-          button.disabled = Boolean(model.active);
-          if (!model.active) button.addEventListener('click', () => deleteModel(model));
+          const canDelete = Boolean(model.can_delete) && !model.active;
+          button.textContent = model.active ? 'In use' : (canDelete ? 'Delete' : 'Managed');
+          button.disabled = !canDelete;
+          if (canDelete) button.addEventListener('click', () => deleteModel(model));
           row.appendChild(button);
         }
         els.modelList.appendChild(row);
       });
+      if (els.modelManagerStatus) els.modelManagerStatus.textContent = compatibilityMode
+        ? 'Showing a read-only list from the older backend. Relaunch OfflineAI after updating to enable model management.'
+        : '';
     } catch (error) {
-      if (els.modelManagerStatus) els.modelManagerStatus.textContent = error.message.includes('HTTP 404')
-        ? 'The chat screen is newer than the running backend. Restart OfflineAI again, or close and relaunch the USB shortcut.'
-        : `Could not read model list: ${error.message}`;
+      if (els.modelManagerStatus) els.modelManagerStatus.textContent = `Could not read model list: ${error.message}`;
     }
   }
 
