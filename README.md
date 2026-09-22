@@ -27,6 +27,9 @@ llama.cpp context allocation, keeps PDF retrieval small, and uses the optional
 Qwen3 0.6B model when that model is present. Copy
 `models\qwen3-0.6b\Qwen3-0.6B-Q4_0.gguf` into the package to make that fallback
 available; the model is not stored in this public repository.
+If it is missing, open Settings in OfflineAI and use **Download super-light
+model**. The downloader shows progress, retries interrupted transfers, and
+verifies the model before making it available.
 
 ## Running the USB package
 

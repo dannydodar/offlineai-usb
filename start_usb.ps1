@@ -20,8 +20,10 @@ try {
 } catch { }
 $lowResource = (($totalMemoryBytes -gt 0) -and ($totalMemoryBytes -le 6GB)) -or (($logicalProcessors -le 4) -and ($totalMemoryBytes -gt 0) -and ($totalMemoryBytes -le 8GB))
 if ($Model -eq 'auto') {
-    $qwenCandidate = Join-Path (Join-Path $Root 'models') 'qwen3-0.6b\Qwen3-0.6B-Q4_0.gguf'
-    $Model = if ($lowResource -and (Test-Path -LiteralPath $qwenCandidate)) { 'qwen3' } else { 'e2b' }
+    $qwenUsbCandidate = Join-Path (Join-Path $Root 'models') 'qwen3-0.6b\Qwen3-0.6B-Q4_0.gguf'
+    $qwenPcCandidate = Join-Path (Join-Path $env:LOCALAPPDATA 'OfflineAI\models') 'qwen3-0.6b\Qwen3-0.6B-Q4_0.gguf'
+    $hasQwen = (Test-Path -LiteralPath $qwenUsbCandidate) -or (Test-Path -LiteralPath $qwenPcCandidate)
+    $Model = if ($lowResource -and $hasQwen) { 'qwen3' } else { 'e2b' }
 }
 $modelName = switch ($Model) {
     'e4b' { 'gemma-4-E4B-it-GGUF\gemma-4-E4B-it-Q4_K_M.gguf' }
@@ -33,15 +35,21 @@ $modelAlias = switch ($Model) {
     'qwen3' { 'qwen/qwen3-0.6b' }
     default { 'google/gemma-4-e2b' }
 }
-$modelPath = Join-Path (Join-Path $Root 'models') $modelName
-if (-not (Test-Path -LiteralPath $modelPath)) { throw "Selected model not found: $modelPath" }
+$usbModelPath = Join-Path (Join-Path $Root 'models') $modelName
+$pcModelRoot = Join-Path $env:LOCALAPPDATA 'OfflineAI\models'
+$pcModelPath = Join-Path $pcModelRoot $modelName
+$modelPath = $usbModelPath
 $modelFolderForBackend = Join-Path $Root 'models'
 $modelLocation = 'USB'
-if (-not $NoOffload) {
+if ((-not (Test-Path -LiteralPath $usbModelPath)) -and (Test-Path -LiteralPath $pcModelPath)) {
+    $modelPath = $pcModelPath
+    $modelFolderForBackend = $pcModelRoot
+    $modelLocation = 'PC cache'
+}
+if (-not (Test-Path -LiteralPath $modelPath)) { throw "Selected model not found on the USB or PC cache: $modelName" }
+if ((-not $NoOffload) -and ($modelLocation -ne 'PC cache')) {
     try {
         & (Join-Path $Root 'offload_models.ps1') -Model $Model
-        $pcModelRoot = Join-Path $env:LOCALAPPDATA 'OfflineAI\models'
-        $pcModelPath = Join-Path $pcModelRoot $modelName
         if (Test-Path -LiteralPath $pcModelPath) {
             $modelPath = $pcModelPath
             $modelFolderForBackend = $pcModelRoot

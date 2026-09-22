@@ -11,7 +11,8 @@
       localModels: [],
       parameters: { temperature: 0.2, topP: 0.9, maxOutputTokens: 512, maxContextTokens: 4096, retrievalLimit: 5, thinking: true },
       systemPrompt: '',
-      hardware: null
+      hardware: null,
+      downloadableModels: []
     },
     messages: [],
     context: null
@@ -33,6 +34,9 @@
     settingsButton: document.querySelector('#settingsButton'),
     settingsPanel: document.querySelector('#settingsPanel'),
     hardwareNotice: document.querySelector('#hardwareNotice'),
+    modelDownloadPanel: document.querySelector('#modelDownloadPanel'),
+    downloadModelButton: document.querySelector('#downloadModelButton'),
+    modelDownloadStatus: document.querySelector('#modelDownloadStatus'),
     engineLabel: document.querySelector('#engineLabel'),
     checkUpdatesButton: document.querySelector('#checkUpdatesButton'),
     applyUpdateButton: document.querySelector('#applyUpdateButton'),
@@ -125,6 +129,7 @@
       state.config = { ...state.config, ...backend };
       if (backend.system_prompt) state.config.systemPrompt = backend.system_prompt;
       if (Array.isArray(backend.models)) state.config.localModels = backend.models;
+      if (Array.isArray(backend.downloadable_models)) state.config.downloadableModels = backend.downloadable_models;
     } catch (_) {}
   }
 
@@ -234,7 +239,68 @@
       els.modelQuickLabel.textContent = selected ? modelLabel(selected) : 'Local model';
     }
     if (parameters.thinking !== undefined && els.thinking) els.thinking.checked = Boolean(parameters.thinking);
+    updateModelDownloadPanel();
     updateContextMeter();
+  }
+
+  function formatBytes(value) {
+    const bytes = Number(value || 0);
+    if (bytes >= 1024 ** 3) return `${(bytes / (1024 ** 3)).toFixed(2)} GB`;
+    return `${Math.round(bytes / (1024 ** 2))} MB`;
+  }
+
+  function updateModelDownloadPanel(downloadState = null) {
+    if (!els.modelDownloadPanel) return;
+    const qwen = (state.config.downloadableModels || []).find(model => model.id === 'qwen/qwen3-0.6b');
+    const installed = (state.config.localModels || []).some(model => modelId(model) === 'qwen/qwen3-0.6b');
+    if (!qwen || installed) {
+      els.modelDownloadPanel.hidden = true;
+      return;
+    }
+    els.modelDownloadPanel.hidden = false;
+    const current = downloadState || {};
+    if (current.status === 'downloading' || current.status === 'starting') {
+      els.downloadModelButton.disabled = true;
+      els.downloadModelButton.textContent = 'Downloading…';
+      els.modelDownloadStatus.textContent = current.message || `${formatBytes(current.bytes_downloaded)} of ${formatBytes(current.total_bytes)} (${current.percent || 0}%)`;
+    } else if (current.status === 'complete') {
+      els.downloadModelButton.disabled = true;
+      els.downloadModelButton.textContent = 'Download complete';
+      els.modelDownloadStatus.textContent = current.message || 'Restart OfflineAI to load the new model.';
+    } else if (current.status === 'error') {
+      els.downloadModelButton.disabled = false;
+      els.downloadModelButton.textContent = 'Retry model download';
+      els.modelDownloadStatus.textContent = current.message || 'The download failed.';
+    } else {
+      els.downloadModelButton.disabled = false;
+      els.downloadModelButton.textContent = `Download super-light model (${formatBytes(qwen.size_bytes)})`;
+      els.modelDownloadStatus.textContent = 'The download is optional. It is recommended for very low-memory laptops.';
+    }
+  }
+
+  let modelDownloadTimer = null;
+  async function pollModelDownload() {
+    try {
+      const result = await request(endpoint('/api/model/download/status'));
+      updateModelDownloadPanel(result);
+      if (result.status === 'downloading' || result.status === 'starting') {
+        modelDownloadTimer = window.setTimeout(pollModelDownload, 1000);
+      }
+    } catch (error) {
+      if (els.modelDownloadStatus) els.modelDownloadStatus.textContent = `Could not read download status: ${error.message}`;
+      if (els.downloadModelButton) els.downloadModelButton.disabled = false;
+    }
+  }
+
+  async function downloadModel() {
+    if (modelDownloadTimer) window.clearTimeout(modelDownloadTimer);
+    updateModelDownloadPanel({ status: 'starting', message: 'Preparing model download…' });
+    try {
+      await request(endpoint('/api/model/download'), { method: 'POST', body: '{}' });
+      await pollModelDownload();
+    } catch (error) {
+      updateModelDownloadPanel({ status: 'error', message: `Model download failed: ${error.message}` });
+    }
   }
 
   function applyModelDefaults() {
@@ -371,6 +437,7 @@
   els.settingsButton.addEventListener('click', () => { const open = els.settingsPanel.hidden; els.settingsPanel.hidden = !open; els.settingsButton.setAttribute('aria-expanded', String(open)); });
   els.checkUpdatesButton.addEventListener('click', checkUpdates);
   els.applyUpdateButton.addEventListener('click', applyUpdate);
+  els.downloadModelButton?.addEventListener('click', downloadModel);
 
   try { state.messages = JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch (_) { state.messages = []; }
   (async () => { render(); await loadConfig(); applyConfigMetadata(); await Promise.all([checkHealth(), loadModels()]); })();

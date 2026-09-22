@@ -28,6 +28,11 @@
         <label class="setting-field">Model<select id="modelSelect" aria-label="Model selection"></select></label>
         <span id="modelFolder" class="model-folder" aria-live="polite"></span>
         <span id="engineLabel" class="model-folder" aria-live="polite"></span>
+        <div id="modelDownloadPanel" class="model-download" hidden>
+          <p><strong>Need the super-light model?</strong> Download Qwen3 0.6B directly from the model host. It is about 429 MB and is checked before installation.</p>
+          <button id="downloadModelButton" class="button secondary" type="button">Download super-light model</button>
+          <span id="modelDownloadStatus" class="setting-help" role="status"></span>
+        </div>
       </details>
       <details class="setting-block">
         <summary class="setting-title">PDF library</summary>

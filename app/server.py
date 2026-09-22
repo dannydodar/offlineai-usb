@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 from rag_backend import (DEFAULT_MODEL, LMStudioClient, SearchIndex, configured_model,
                          context_accounting, hardware_profile, load_model_registry,
                          load_system_prompt, retrieval_decision)
+from model_download import catalog as model_download_catalog, start_download, status as model_download_status
 from update_manager import apply_update, check_updates
 
 # The portable assistant is intentionally local-only. Keep the bind address
@@ -95,7 +96,10 @@ class Handler(BaseHTTPRequestHandler):
             config["engine"] = os.getenv("OFFLINEAI_ENGINE", "LM Studio API")
             config["version"] = __import__("update_manager").current_version()
             config["hardware"] = hardware_profile([item.get("id", "") for item in config.get("models", [])])
+            config["downloadable_models"] = model_download_catalog()
             self._send(200, config)
+        elif route == "/model/download/status":
+            self._send(200, model_download_status())
         elif route == "/source":
             qs = parse_qs(parsed.query)
             self._send_pdf(qs.get("path", [""])[0])
@@ -116,6 +120,9 @@ class Handler(BaseHTTPRequestHandler):
         route = route[4:] if route.startswith("/api/") else route
         if route == "/update/apply":
             self._send(200, apply_update())
+            return
+        if route == "/model/download":
+            self._send(200, start_download())
             return
         if route != "/chat":
             self._send(404, {"error": "not found"}); return

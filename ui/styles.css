@@ -15,6 +15,7 @@ h1 { font-size:23px; margin:0; letter-spacing:-.02em; }
 .settings-panel { flex:none; max-height:min(52dvh,460px); overflow:auto; display:flex; flex-direction:column; gap:8px; }
 .settings-panel[hidden] { display:none; }
 .hardware-notice { padding:9px 11px; border:1px solid #d0a64a; border-radius:9px; background:#2a2517; color:#f2d78f; font-size:12px; line-height:1.4; }
+.model-download { margin-top:10px; padding:9px 10px; border:1px dashed var(--line); border-radius:8px; color:var(--muted); font-size:12px; line-height:1.4; }.model-download p { margin:0 0 8px; }.model-download .button { margin-right:8px; }
 .controls { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:10px; background:var(--panel); border:1px solid var(--line); border-radius:10px; }
 label { color:var(--muted); font-size:13px; display:flex; align-items:center; gap:8px; }
 select, textarea, input { color:var(--text); background:var(--panel-2); border:1px solid var(--line); border-radius:7px; font:inherit; }
