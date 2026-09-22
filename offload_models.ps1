@@ -57,7 +57,7 @@ foreach ($key in $selected) {
             throw "Not enough free space on $($destinationDrive.Name):. Need approximately $([math]::Round(($copyBytes + $reserveBytes) / 1GB, 2)) GB including reserve."
         }
         foreach ($item in $copyPlan) {
-            Write-Output "Copying $([math]::Round($item.Length / 1GB, 2)) GB for $key to $destination..."
+            Write-Output "Copying $([math]::Round($item.Length / 1GB, 2)) GB for $key to $($item.Destination)..."
             Copy-Item -LiteralPath $item.Source -Destination $item.Destination -Force
             $copied = Get-Item -LiteralPath $item.Destination
             if ($copied.Length -ne $item.Length) { throw "Model copy verification failed: $($item.Destination)" }
@@ -69,4 +69,3 @@ foreach ($key in $selected) {
         Write-Output "Model $key is already current in the PC cache: $destinationFolder"
     }
 }
-
