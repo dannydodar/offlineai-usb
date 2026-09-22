@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import ssl
 import tempfile
 import urllib.error
 import urllib.request
@@ -14,6 +15,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 VERSION_FILE = ROOT / "version.json"
 UPDATE_CONFIG = ROOT / "update_config.json"
+CA_BUNDLE = Path(__file__).resolve().parent / "cacert.pem"
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -36,7 +38,11 @@ def _version_tuple(value: str) -> tuple[int, ...]:
 
 def _fetch(url: str, timeout: int = 15) -> bytes:
     request = urllib.request.Request(url, headers={"User-Agent": "OfflineAI-Updater/1.0", "Accept": "application/json"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    # The bundled Python runtime may not know where the host OS certificate
+    # store is. Ship a Mozilla CA bundle so HTTPS remains verified on fresh
+    # laptops without relying on LM Studio or a system Python installation.
+    context = ssl.create_default_context(cafile=str(CA_BUNDLE)) if CA_BUNDLE.is_file() else ssl.create_default_context()
+    with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
         return response.read()
 
 

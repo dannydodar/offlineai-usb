@@ -17,6 +17,9 @@ The deployable folder is normally `AI\\OfflineAI` on the USB drive:
 
 Models, PDFs, the catalog database, and runtime binaries are intentionally not
 stored in the public GitHub repository. The update installer preserves them.
+The updater carries its own Mozilla CA certificate bundle so GitHub HTTPS
+updates continue to work with the portable Python runtime on another laptop.
+Certificate verification remains enabled.
 
 ## Running the USB package
 
