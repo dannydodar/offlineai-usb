@@ -231,7 +231,7 @@
     Object.entries(els.parameterInputs).forEach(([key, input]) => { if (parameters[key] !== undefined) input.value = parameters[key]; });
     els.systemPrompt.textContent = state.config.systemPrompt || 'Configured by local backend.';
     if (els.modelFolder && state.config.folder) els.modelFolder.textContent = `Models: ${state.config.folder}`;
-    if (els.engineLabel && state.config.engine) els.engineLabel.textContent = `Engine: ${state.config.engine}`;
+    if (els.engineLabel && state.config.engine) els.engineLabel.textContent = `Engine: ${state.config.engine}${state.config.version ? ` · software v${state.config.version}` : ''}`;
     if (els.hardwareNotice && hardware.id === 'low-resource') {
       els.hardwareNotice.textContent = `${hardware.label}: ${hardware.message} Thinking remains available, but is off by default to save time and memory.`;
       els.hardwareNotice.hidden = false;
@@ -344,7 +344,9 @@
         els.modelList.appendChild(row);
       });
     } catch (error) {
-      if (els.modelManagerStatus) els.modelManagerStatus.textContent = `Could not read model list: ${error.message}`;
+      if (els.modelManagerStatus) els.modelManagerStatus.textContent = error.message.includes('HTTP 404')
+        ? 'The chat screen is newer than the running backend. Restart OfflineAI again, or close and relaunch the USB shortcut.'
+        : `Could not read model list: ${error.message}`;
     }
   }
 

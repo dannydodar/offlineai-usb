@@ -84,7 +84,15 @@ def apply_update() -> dict[str, Any]:
     branch = str(checked["branch"])
     backup_root = ROOT / "update-backups" / datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
     preserve = {"models", "runtime", "logs", "worker-pdf/pdf_catalog.sqlite3", "update-backups"}
-    allow_files = {"version.json", "update_config.json", "README.md"}
+    # Keep the launcher and helper scripts in sync with the backend. This is
+    # important because the Restart button runs the root launcher, while the
+    # app itself is updated from the app/ directory.
+    allow_files = {
+        "version.json", "update_config.json", "README.md",
+        "start_usb.ps1", "start_usb.cmd",
+        "stop_usb.ps1", "stop_usb.cmd",
+        "offload_models.ps1",
+    }
     allow_dirs = {"app", "ui", "worker-pdf"}
     try:
         archive = _fetch(f"https://github.com/{repository}/archive/refs/heads/{branch}.zip", timeout=60)

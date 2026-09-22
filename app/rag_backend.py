@@ -63,6 +63,12 @@ def hardware_profile(available_model_ids: list[str] | None = None) -> dict[str, 
     low_resource = bool(memory_gb and memory_gb <= 6) or (logical_processors <= 4 and bool(memory_gb and memory_gb <= 8))
     available = set(available_model_ids or [])
     active_model = os.getenv("OFFLINEAI_ACTIVE_MODEL", "").strip()
+    if not active_model:
+        engine = os.getenv("OFFLINEAI_ENGINE", "").lower()
+        if "gemma-4-e4b" in engine or "e4b" in engine:
+            active_model = E4B_MODEL
+        elif "gemma-4-e2b" in engine or "e2b" in engine:
+            active_model = DEFAULT_MODEL
     if low_resource:
         preferred = active_model if active_model in available else ("qwen/qwen3-0.6b" if "qwen/qwen3-0.6b" in available else DEFAULT_MODEL)
         return {
