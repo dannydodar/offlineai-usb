@@ -23,6 +23,28 @@ $backendPidFile = Join-Path $logDir 'usb-backend.pid'
 $runnerPort = 1235
 $hostAddress = if ($Lan) { '0.0.0.0' } else { '127.0.0.1' }
 
+function Test-PortAvailable([int]$Candidate) {
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Candidate)
+    try {
+        $listener.Start()
+        return $true
+    } catch {
+        return $false
+    } finally {
+        if ($listener) { $listener.Stop() }
+    }
+}
+
+$requestedPort = $Port
+if (-not (Test-PortAvailable $Port)) {
+    $fallbackPort = 8775..8790 | Where-Object { Test-PortAvailable $_ } | Select-Object -First 1
+    if (-not $fallbackPort) {
+        throw "OfflineAI web port $requestedPort is busy and no fallback port from 8775 to 8790 is available."
+    }
+    $Port = [int]$fallbackPort
+    Write-Output "Port $requestedPort is already in use; using free fallback port $Port."
+}
+
 foreach ($pidFile in $runnerPidFile,$backendPidFile) {
     if (Test-Path -LiteralPath $pidFile) {
         Stop-Process -Id ([int](Get-Content -Raw -LiteralPath $pidFile)) -Force -ErrorAction SilentlyContinue

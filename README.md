@@ -32,7 +32,9 @@ the PowerShell launcher explicitly:
 
 Use `stop_usb.cmd` to stop only processes started by the USB launcher. The
 normal launcher binds to localhost. `-Lan` binds the web backend to all local
-interfaces and should only be used on a trusted private network.
+interfaces and should only be used on a trusted private network. If the
+default web port `8765` is already occupied, the launcher automatically uses
+the first free fallback port from `8775` through `8790` and opens that URL.
 
 ## Local development
 
