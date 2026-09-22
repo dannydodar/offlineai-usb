@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('e2b','e4b','all')]
+    [ValidateSet('e2b','e4b','qwen3','all')]
     [string]$Model = 'e2b',
     [string]$Destination = ''
 )
@@ -14,8 +14,9 @@ if ([string]::IsNullOrWhiteSpace($Destination)) {
 $sets = @{
     e2b = @{ folder = 'gemma-4-E2B-it-GGUF'; files = @('gemma-4-E2B-it-Q4_K_M.gguf', 'mmproj-gemma-4-E2B-it-BF16.gguf') }
     e4b = @{ folder = 'gemma-4-E4B-it-GGUF'; files = @('gemma-4-E4B-it-Q4_K_M.gguf', 'mmproj-gemma-4-E4B-it-BF16.gguf') }
+    qwen3 = @{ folder = 'qwen3-0.6b'; files = @('Qwen3-0.6B-Q4_0.gguf') }
 }
-$selected = if ($Model -eq 'all') { @('e2b', 'e4b') } else { @($Model) }
+$selected = if ($Model -eq 'all') { @('e2b', 'e4b', 'qwen3') } else { @($Model) }
 $destinationRoot = [System.IO.Path]::GetFullPath($Destination)
 $driveName = ([System.IO.Path]::GetPathRoot($destinationRoot)).Substring(0, 1)
 $destinationDrive = Get-PSDrive -Name $driveName -ErrorAction Stop

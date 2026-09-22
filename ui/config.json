@@ -6,7 +6,8 @@
   "searchPath": "/api/search",
   "localModels": [
     { "id": "google/gemma-4-e2b", "label": "Gemma 4 E2B (light)" },
-    { "id": "google/gemma-4-e4b", "label": "Gemma 4 E4B (stronger)" }
+    { "id": "google/gemma-4-e4b", "label": "Gemma 4 E4B (stronger)" },
+    { "id": "qwen/qwen3-0.6b", "label": "Qwen3 0.6B (super-light)" }
   ],
   "parameters": { "temperature": 0.2, "topP": 0.9, "maxOutputTokens": 700, "maxContextTokens": 4096, "retrievalLimit": 5, "thinking": true },
   "systemPrompt": "Loaded from the local backend.",

@@ -10,7 +10,8 @@
       chatPath: '/api/chat',
       localModels: [],
       parameters: { temperature: 0.2, topP: 0.9, maxOutputTokens: 512, maxContextTokens: 4096, retrievalLimit: 5, thinking: true },
-      systemPrompt: ''
+      systemPrompt: '',
+      hardware: null
     },
     messages: [],
     context: null
@@ -31,6 +32,7 @@
     modelFolder: document.querySelector('#modelFolder'),
     settingsButton: document.querySelector('#settingsButton'),
     settingsPanel: document.querySelector('#settingsPanel'),
+    hardwareNotice: document.querySelector('#hardwareNotice'),
     engineLabel: document.querySelector('#engineLabel'),
     checkUpdatesButton: document.querySelector('#checkUpdatesButton'),
     applyUpdateButton: document.querySelector('#applyUpdateButton'),
@@ -214,11 +216,19 @@
   function applyConfigMetadata(meta = {}) {
     if (meta.system_prompt) state.config.systemPrompt = meta.system_prompt;
     if (meta.systemPrompt) state.config.systemPrompt = meta.systemPrompt;
-    const parameters = { ...(state.config.parameters || {}), ...(meta.parameters || {}) };
+    const hardware = meta.hardware || state.config.hardware || {};
+    if (meta.hardware) state.config.hardware = meta.hardware;
+    const parameters = { ...(state.config.parameters || {}), ...(hardware.parameters || {}), ...(meta.parameters || {}) };
     Object.entries(els.parameterInputs).forEach(([key, input]) => { if (parameters[key] !== undefined) input.value = parameters[key]; });
     els.systemPrompt.textContent = state.config.systemPrompt || 'Configured by local backend.';
     if (els.modelFolder && state.config.folder) els.modelFolder.textContent = `Models: ${state.config.folder}`;
     if (els.engineLabel && state.config.engine) els.engineLabel.textContent = `Engine: ${state.config.engine}`;
+    if (els.hardwareNotice && hardware.id === 'low-resource') {
+      els.hardwareNotice.textContent = `${hardware.label}: ${hardware.message} Thinking remains available, but is off by default to save time and memory.`;
+      els.hardwareNotice.hidden = false;
+    } else if (els.hardwareNotice) {
+      els.hardwareNotice.hidden = true;
+    }
     if (els.modelQuickLabel) {
       const selected = (state.config.localModels || []).find(model => modelId(model) === els.model.value);
       els.modelQuickLabel.textContent = selected ? modelLabel(selected) : 'Local model';
@@ -235,6 +245,12 @@
     if (defaults.top_p !== undefined) els.parameterInputs.topP.value = defaults.top_p;
     if (defaults.max_output_tokens !== undefined) els.parameterInputs.maxOutputTokens.value = defaults.max_output_tokens;
     if (selected.context_window !== undefined) els.parameterInputs.maxContextTokens.value = selected.context_window;
+    const hardwareParameters = state.config.hardware?.parameters || {};
+    Object.entries(hardwareParameters).forEach(([key, value]) => {
+      const input = els.parameterInputs[key];
+      if (input && value !== undefined) input.value = value;
+    });
+    if (hardwareParameters.thinking !== undefined && els.thinking) els.thinking.checked = Boolean(hardwareParameters.thinking);
     if (els.modelQuickLabel) els.modelQuickLabel.textContent = modelLabel(selected);
     updateContextMeter();
   }
@@ -249,6 +265,8 @@
     }
     els.model.disabled = false;
     models.forEach(model => { const id = modelId(model); if (id) els.model.add(new Option(modelLabel(model), id)); });
+    const recommended = state.config.hardware?.recommended_model;
+    if (recommended && [...els.model.options].some(option => option.value === recommended)) els.model.value = recommended;
     applyModelDefaults();
   }
 

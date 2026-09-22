@@ -21,9 +21,10 @@
 
     <section id="settingsPanel" class="settings-panel" hidden aria-label="Assistant settings">
       <p class="settings-intro">These controls are optional. The assistant is ready to chat using sensible settings. Change something only when you know what you want it to do.</p>
+      <div id="hardwareNotice" class="hardware-notice" hidden></div>
       <details class="setting-block" open>
         <summary class="setting-title">Model and speed</summary>
-        <p class="setting-help">The model is the local AI brain. E2B is lighter and usually faster; E4B is stronger but needs more memory. The model may be copied to this computer for better speed.</p>
+        <p class="setting-help">The model is the local AI brain. Qwen3 0.6B is the small emergency option for very limited laptops. E2B is stronger and E4B is strongest, but both need more memory. The selected model may be copied to this computer for better speed.</p>
         <label class="setting-field">Model<select id="modelSelect" aria-label="Model selection"></select></label>
         <span id="modelFolder" class="model-folder" aria-live="polite"></span>
         <span id="engineLabel" class="model-folder" aria-live="polite"></span>

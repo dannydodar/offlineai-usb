@@ -5,6 +5,7 @@ import json
 import os
 import re
 import sqlite3
+import ctypes
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -27,6 +28,75 @@ LIBRARY_REQUEST_TERMS = {
     "document", "documents", "library", "libraries", "source", "sources",
     "reference", "references", "according",
 }
+
+
+def _total_memory_bytes() -> int:
+    """Read physical RAM without requiring psutil or another dependency."""
+    if os.name == "nt":
+        class MemoryStatusEx(ctypes.Structure):
+            _fields_ = [
+                ("dwLength", ctypes.c_ulong),
+                ("dwMemoryLoad", ctypes.c_ulong),
+                ("ullTotalPhys", ctypes.c_ulonglong),
+                ("ullAvailPhys", ctypes.c_ulonglong),
+                ("ullTotalPageFile", ctypes.c_ulonglong),
+                ("ullAvailPageFile", ctypes.c_ulonglong),
+                ("ullTotalVirtual", ctypes.c_ulonglong),
+                ("ullAvailVirtual", ctypes.c_ulonglong),
+                ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+            ]
+        status = MemoryStatusEx()
+        status.dwLength = ctypes.sizeof(MemoryStatusEx)
+        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+            return int(status.ullTotalPhys)
+    try:
+        return int(os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES"))
+    except (AttributeError, OSError, ValueError):
+        return 0
+
+
+def hardware_profile(available_model_ids: list[str] | None = None) -> dict[str, Any]:
+    """Return safe defaults for the host without adding a hardware dependency."""
+    logical_processors = os.cpu_count() or 1
+    total_memory = _total_memory_bytes()
+    memory_gb = total_memory / (1024 ** 3) if total_memory else 0
+    low_resource = bool(memory_gb and memory_gb <= 6) or (logical_processors <= 4 and bool(memory_gb and memory_gb <= 8))
+    available = set(available_model_ids or [])
+    active_model = os.getenv("OFFLINEAI_ACTIVE_MODEL", "").strip()
+    if low_resource:
+        preferred = active_model if active_model in available else ("qwen/qwen3-0.6b" if "qwen/qwen3-0.6b" in available else DEFAULT_MODEL)
+        return {
+            "id": "low-resource",
+            "label": "Low-resource mode",
+            "message": "This computer has limited memory or CPU capacity. OfflineAI is using conservative settings to reduce freezing and paging.",
+            "total_memory_gb": round(memory_gb, 1) if memory_gb else None,
+            "logical_processors": logical_processors,
+            "recommended_model": preferred,
+            "parameters": {
+                "temperature": 0.7 if preferred == "qwen/qwen3-0.6b" else 0.2,
+                "topP": 0.8 if preferred == "qwen/qwen3-0.6b" else 0.9,
+                "maxOutputTokens": 384,
+                "maxContextTokens": 2048,
+                "retrievalLimit": 2,
+                "thinking": False,
+            },
+        }
+    return {
+        "id": "standard",
+        "label": "Standard mode",
+        "message": "The computer appears suitable for the normal OfflineAI settings.",
+        "total_memory_gb": round(memory_gb, 1) if memory_gb else None,
+        "logical_processors": logical_processors,
+        "recommended_model": active_model if active_model in available else DEFAULT_MODEL,
+        "parameters": {
+            "temperature": 0.2,
+            "topP": 0.9,
+            "maxOutputTokens": 700,
+            "maxContextTokens": 4096,
+            "retrievalLimit": 5,
+            "thinking": True,
+        },
+    }
 
 
 def _quote_ident(value: str) -> str:

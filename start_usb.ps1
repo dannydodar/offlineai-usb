@@ -1,6 +1,6 @@
 param(
-    [ValidateSet('e2b','e4b')]
-    [string]$Model = 'e2b',
+    [ValidateSet('auto','e2b','e4b','qwen3')]
+    [string]$Model = 'auto',
     [int]$Port = 8765,
     [switch]$NoOffload
 )
@@ -11,7 +11,28 @@ $Python = Join-Path $Root 'runtime\python.exe'
 if (-not (Test-Path -LiteralPath $Python)) { throw "Portable Python runtime not found: $Python" }
 $runner = Join-Path $Root 'runtime\llama-cpp-cpu-b11102\llama-server.exe'
 if (-not (Test-Path -LiteralPath $runner)) { throw "Portable llama.cpp runner not found: $runner" }
-$modelName = if ($Model -eq 'e4b') { 'gemma-4-E4B-it-GGUF\gemma-4-E4B-it-Q4_K_M.gguf' } else { 'gemma-4-E2B-it-GGUF\gemma-4-E2B-it-Q4_K_M.gguf' }
+$totalMemoryBytes = 0
+$logicalProcessors = [Environment]::ProcessorCount
+try {
+    $computer = Get-CimInstance Win32_ComputerSystem -ErrorAction Stop
+    $totalMemoryBytes = [long]$computer.TotalPhysicalMemory
+    if ($computer.NumberOfLogicalProcessors) { $logicalProcessors = [int]$computer.NumberOfLogicalProcessors }
+} catch { }
+$lowResource = (($totalMemoryBytes -gt 0) -and ($totalMemoryBytes -le 6GB)) -or (($logicalProcessors -le 4) -and ($totalMemoryBytes -gt 0) -and ($totalMemoryBytes -le 8GB))
+if ($Model -eq 'auto') {
+    $qwenCandidate = Join-Path (Join-Path $Root 'models') 'qwen3-0.6b\Qwen3-0.6B-Q4_0.gguf'
+    $Model = if ($lowResource -and (Test-Path -LiteralPath $qwenCandidate)) { 'qwen3' } else { 'e2b' }
+}
+$modelName = switch ($Model) {
+    'e4b' { 'gemma-4-E4B-it-GGUF\gemma-4-E4B-it-Q4_K_M.gguf' }
+    'qwen3' { 'qwen3-0.6b\Qwen3-0.6B-Q4_0.gguf' }
+    default { 'gemma-4-E2B-it-GGUF\gemma-4-E2B-it-Q4_K_M.gguf' }
+}
+$modelAlias = switch ($Model) {
+    'e4b' { 'google/gemma-4-e4b' }
+    'qwen3' { 'qwen/qwen3-0.6b' }
+    default { 'google/gemma-4-e2b' }
+}
 $modelPath = Join-Path (Join-Path $Root 'models') $modelName
 if (-not (Test-Path -LiteralPath $modelPath)) { throw "Selected model not found: $modelPath" }
 $modelFolderForBackend = Join-Path $Root 'models'
@@ -72,7 +93,8 @@ if (-not (Test-PortAvailable $Port)) {
     Write-Output "Port $requestedPort is already in use; using free fallback port $Port."
 }
 
-$runnerProcess = Start-Process -FilePath $runner -ArgumentList @('--model', $modelPath, '--alias', ("google/gemma-4-$Model"), '--host', '127.0.0.1', '--port', $runnerPort, '--ctx-size', '4096', '--n-gpu-layers', '0', '--parallel', '1') -WorkingDirectory (Split-Path $runner -Parent) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDir 'usb-runner.out.log') -RedirectStandardError (Join-Path $logDir 'usb-runner.err.log')
+$contextSize = if ($lowResource) { 2048 } else { 4096 }
+$runnerProcess = Start-Process -FilePath $runner -ArgumentList @('--model', $modelPath, '--alias', $modelAlias, '--host', '127.0.0.1', '--port', $runnerPort, '--ctx-size', [string]$contextSize, '--n-gpu-layers', '0', '--parallel', '1') -WorkingDirectory (Split-Path $runner -Parent) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDir 'usb-runner.out.log') -RedirectStandardError (Join-Path $logDir 'usb-runner.err.log')
 Set-Content -LiteralPath $runnerPidFile -Value $runnerProcess.Id -Encoding ascii
 $ready = $false
 for ($i=0; $i -lt 180; $i++) {
@@ -87,6 +109,7 @@ $env:OFFLINEAI_DB_PATH = Join-Path $Root 'worker-pdf\pdf_catalog.sqlite3'
 $env:OFFLINEAI_PDF_ROOT = $pdfRoot
 $env:OFFLINEAI_LM_BASE = "http://127.0.0.1:$runnerPort/v1"
 $env:OFFLINEAI_ENGINE = "llama.cpp CPU (independent, $Model; model on $modelLocation)"
+$env:OFFLINEAI_ACTIVE_MODEL = $modelAlias
 $env:OFFLINEAI_MODEL_FOLDER = $modelFolderForBackend
 $backend = Start-Process -FilePath $Python -ArgumentList @('-u', (Join-Path $Root 'app\server.py')) -WorkingDirectory $Root -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDir 'usb-backend.out.log') -RedirectStandardError (Join-Path $logDir 'usb-backend.err.log')
 Set-Content -LiteralPath $backendPidFile -Value $backend.Id -Encoding ascii

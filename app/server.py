@@ -8,8 +8,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from rag_backend import (DEFAULT_MODEL, LMStudioClient, SearchIndex, configured_model,
-                         context_accounting, load_model_registry, load_system_prompt,
-                         retrieval_decision)
+                         context_accounting, hardware_profile, load_model_registry,
+                         load_system_prompt, retrieval_decision)
 from update_manager import apply_update, check_updates
 
 # The portable assistant is intentionally local-only. Keep the bind address
@@ -94,6 +94,7 @@ class Handler(BaseHTTPRequestHandler):
             config["system_prompt"] = load_system_prompt()
             config["engine"] = os.getenv("OFFLINEAI_ENGINE", "LM Studio API")
             config["version"] = __import__("update_manager").current_version()
+            config["hardware"] = hardware_profile([item.get("id", "") for item in config.get("models", [])])
             self._send(200, config)
         elif route == "/source":
             qs = parse_qs(parsed.query)

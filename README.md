@@ -21,6 +21,13 @@ The updater carries its own Mozilla CA certificate bundle so GitHub HTTPS
 updates continue to work with the portable Python runtime on another laptop.
 Certificate verification remains enabled.
 
+On computers with around 6 GB of RAM or less, or with a low-power four-core
+CPU, the launcher automatically enters low-resource mode. It reduces the
+llama.cpp context allocation, keeps PDF retrieval small, and uses the optional
+Qwen3 0.6B model when that model is present. Copy
+`models\qwen3-0.6b\Qwen3-0.6B-Q4_0.gguf` into the package to make that fallback
+available; the model is not stored in this public repository.
+
 ## Running the USB package
 
 From `AI\\OfflineAI`, double-click `start_usb.cmd`. It starts the independent
