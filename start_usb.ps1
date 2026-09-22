@@ -23,6 +23,8 @@ $runnerPort = 1235
 $hostAddress = '127.0.0.1'
 
 function Test-PortAvailable([int]$Candidate) {
+    $listeners = Get-NetTCPConnection -State Listen -LocalPort $Candidate -ErrorAction SilentlyContinue
+    if ($listeners) { return $false }
     $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Candidate)
     try {
         $listener.Start()
@@ -34,6 +36,13 @@ function Test-PortAvailable([int]$Candidate) {
     }
 }
 
+foreach ($pidFile in $runnerPidFile,$backendPidFile) {
+    if (Test-Path -LiteralPath $pidFile) {
+        Stop-Process -Id ([int](Get-Content -Raw -LiteralPath $pidFile)) -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
 $requestedPort = $Port
 if (-not (Test-PortAvailable $Port)) {
     $fallbackPort = 8775..8790 | Where-Object { Test-PortAvailable $_ } | Select-Object -First 1
@@ -42,13 +51,6 @@ if (-not (Test-PortAvailable $Port)) {
     }
     $Port = [int]$fallbackPort
     Write-Output "Port $requestedPort is already in use; using free fallback port $Port."
-}
-
-foreach ($pidFile in $runnerPidFile,$backendPidFile) {
-    if (Test-Path -LiteralPath $pidFile) {
-        Stop-Process -Id ([int](Get-Content -Raw -LiteralPath $pidFile)) -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
-    }
 }
 
 $runnerProcess = Start-Process -FilePath $runner -ArgumentList @('--model', $modelPath, '--alias', ("google/gemma-4-$Model"), '--host', '127.0.0.1', '--port', $runnerPort, '--ctx-size', '4096', '--n-gpu-layers', '0', '--parallel', '1') -WorkingDirectory (Split-Path $runner -Parent) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDir 'usb-runner.out.log') -RedirectStandardError (Join-Path $logDir 'usb-runner.err.log')
