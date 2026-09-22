@@ -30,6 +30,8 @@ available; the model is not stored in this public repository.
 If it is missing, open Settings in OfflineAI and use **Download super-light
 model**. The downloader shows progress, retries interrupted transfers, and
 verifies the model before making it available.
+After installing any update, use the **Restart OfflineAI** button in Settings
+to relaunch the portable stack and load the new files.
 
 ## Running the USB package
 

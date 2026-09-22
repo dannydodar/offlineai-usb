@@ -40,6 +40,7 @@
     engineLabel: document.querySelector('#engineLabel'),
     checkUpdatesButton: document.querySelector('#checkUpdatesButton'),
     applyUpdateButton: document.querySelector('#applyUpdateButton'),
+    restartButton: document.querySelector('#restartButton'),
     updateStatus: document.querySelector('#updateStatus'),
     systemPrompt: document.querySelector('#systemPrompt'),
     contextBar: document.querySelector('#contextBar'),
@@ -267,6 +268,7 @@
       els.downloadModelButton.disabled = true;
       els.downloadModelButton.textContent = 'Download complete';
       els.modelDownloadStatus.textContent = current.message || 'Restart OfflineAI to load the new model.';
+      if (els.restartButton) els.restartButton.hidden = false;
     } else if (current.status === 'error') {
       els.downloadModelButton.disabled = false;
       els.downloadModelButton.textContent = 'Retry model download';
@@ -423,8 +425,22 @@
       const result = await request(endpoint('/api/update/apply'), { method: 'POST', body: '{}' });
       els.updateStatus.textContent = result.message || 'Update installed. Restart OfflineAI.';
       els.applyUpdateButton.hidden = true;
+      if (result.restartRequired && els.restartButton) els.restartButton.hidden = false;
     } catch (error) { els.updateStatus.textContent = `Update failed: ${error.message}`; }
     finally { els.applyUpdateButton.disabled = false; }
+  }
+
+  async function restartOfflineAI() {
+    if (!els.restartButton) return;
+    els.restartButton.disabled = true;
+    els.updateStatus.textContent = 'Restarting OfflineAI…';
+    try {
+      await request(endpoint('/api/restart'), { method: 'POST', body: '{}' });
+      window.setTimeout(() => window.location.reload(), 4000);
+    } catch (error) {
+      els.restartButton.disabled = false;
+      els.updateStatus.textContent = `Restart failed: ${error.message}. Close and start OfflineAI again.`;
+    }
   }
 
   els.form.addEventListener('submit', submit);
@@ -437,6 +453,7 @@
   els.settingsButton.addEventListener('click', () => { const open = els.settingsPanel.hidden; els.settingsPanel.hidden = !open; els.settingsButton.setAttribute('aria-expanded', String(open)); });
   els.checkUpdatesButton.addEventListener('click', checkUpdates);
   els.applyUpdateButton.addEventListener('click', applyUpdate);
+  els.restartButton?.addEventListener('click', restartOfflineAI);
   els.downloadModelButton?.addEventListener('click', downloadModel);
 
   try { state.messages = JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch (_) { state.messages = []; }

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -22,6 +24,20 @@ UI_ROOT = ROOT / "ui"
 PDF_ROOT = Path(os.getenv("OFFLINEAI_PDF_ROOT", "E:\\PDF")).resolve()
 index = SearchIndex()
 lm = LMStudioClient()
+
+
+def _restart_launcher() -> None:
+    """Start the portable launcher after the current backend has answered."""
+    launcher = ROOT / "start_usb.ps1"
+    if not launcher.is_file():
+        raise RuntimeError("portable launcher not found; restart OfflineAI manually")
+    active = os.getenv("OFFLINEAI_ACTIVE_MODEL", "")
+    model = {"google/gemma-4-e2b": "e2b", "google/gemma-4-e4b": "e4b", "qwen/qwen3-0.6b": "qwen3"}.get(active, "auto")
+    port = os.getenv("OFFLINEAI_PORT", "8765")
+    command = ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(launcher), "-Model", model, "-Port", port]
+    flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+    subprocess.Popen(command, cwd=str(ROOT), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, close_fds=True, creationflags=flags)
 
 
 def _add_source_references(answer: str, sources: list[dict]) -> str:
@@ -123,6 +139,15 @@ class Handler(BaseHTTPRequestHandler):
             return
         if route == "/model/download":
             self._send(200, start_download())
+            return
+        if route == "/restart":
+            try:
+                if not (ROOT / "start_usb.ps1").is_file():
+                    raise RuntimeError("portable launcher not found; restart OfflineAI manually")
+                self._send(200, {"ok": True, "restartRequired": True, "message": "OfflineAI is restarting. This page will refresh shortly."})
+                threading.Timer(0.8, _restart_launcher).start()
+            except (OSError, RuntimeError) as exc:
+                self._send(503, {"ok": False, "error": str(exc)})
             return
         if route != "/chat":
             self._send(404, {"error": "not found"}); return
