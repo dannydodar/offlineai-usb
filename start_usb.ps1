@@ -1,7 +1,8 @@
 param(
     [ValidateSet('e2b','e4b')]
     [string]$Model = 'e2b',
-    [int]$Port = 8765
+    [int]$Port = 8765,
+    [switch]$NoOffload
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -13,6 +14,24 @@ if (-not (Test-Path -LiteralPath $runner)) { throw "Portable llama.cpp runner no
 $modelName = if ($Model -eq 'e4b') { 'gemma-4-E4B-it-GGUF\gemma-4-E4B-it-Q4_K_M.gguf' } else { 'gemma-4-E2B-it-GGUF\gemma-4-E2B-it-Q4_K_M.gguf' }
 $modelPath = Join-Path (Join-Path $Root 'models') $modelName
 if (-not (Test-Path -LiteralPath $modelPath)) { throw "Selected model not found: $modelPath" }
+$modelFolderForBackend = Join-Path $Root 'models'
+$modelLocation = 'USB'
+if (-not $NoOffload) {
+    try {
+        & (Join-Path $Root 'offload_models.ps1') -Model $Model
+        $pcModelRoot = Join-Path $env:LOCALAPPDATA 'OfflineAI\models'
+        $pcModelPath = Join-Path $pcModelRoot $modelName
+        if (Test-Path -LiteralPath $pcModelPath) {
+            $modelPath = $pcModelPath
+            $modelFolderForBackend = $pcModelRoot
+            $modelLocation = 'PC cache'
+        } else {
+            Write-Warning "Model offload did not produce the expected local file; using the USB copy."
+        }
+    } catch {
+        Write-Warning "Model offload unavailable ($($_.Exception.Message)); using the USB copy."
+    }
+}
 $pdfRoot = Join-Path $driveRoot 'PDF'
 if (-not (Test-Path -LiteralPath $pdfRoot)) { throw "PDF library not found at $pdfRoot" }
 $logDir = Join-Path $Root 'logs'
@@ -67,11 +86,11 @@ $env:OFFLINEAI_PORT = [string]$Port
 $env:OFFLINEAI_DB_PATH = Join-Path $Root 'worker-pdf\pdf_catalog.sqlite3'
 $env:OFFLINEAI_PDF_ROOT = $pdfRoot
 $env:OFFLINEAI_LM_BASE = "http://127.0.0.1:$runnerPort/v1"
-$env:OFFLINEAI_ENGINE = "llama.cpp CPU (independent, $Model)"
-$env:OFFLINEAI_MODEL_FOLDER = Join-Path $Root 'models'
+$env:OFFLINEAI_ENGINE = "llama.cpp CPU (independent, $Model; model on $modelLocation)"
+$env:OFFLINEAI_MODEL_FOLDER = $modelFolderForBackend
 $backend = Start-Process -FilePath $Python -ArgumentList @('-u', (Join-Path $Root 'app\server.py')) -WorkingDirectory $Root -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDir 'usb-backend.out.log') -RedirectStandardError (Join-Path $logDir 'usb-backend.err.log')
 Set-Content -LiteralPath $backendPidFile -Value $backend.Id -Encoding ascii
 Start-Sleep -Milliseconds 800
 try { Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$Port/api/health" -TimeoutSec 5 | Out-Null } catch { throw 'Portable OfflineAI backend did not become healthy.' }
 Start-Process "http://127.0.0.1:$Port/"
-Write-Output "Portable OfflineAI started at http://127.0.0.1:$Port/ using $Model through independent llama.cpp."
+Write-Output "Portable OfflineAI started at http://127.0.0.1:$Port/ using $Model through independent llama.cpp; model source: $modelLocation."

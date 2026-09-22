@@ -22,16 +22,29 @@ stored in the public GitHub repository. The update installer preserves them.
 
 From `AI\\OfflineAI`, double-click `start_usb.cmd`. It starts the independent
 CPU inference server and the OfflineAI backend, then opens the local web UI.
+On first start it copies the selected model set to
+`%LOCALAPPDATA%\\OfflineAI\\models` and uses that PC copy for inference. This
+avoids repeatedly reading multi-gigabyte model files from the USB. The PDFs
+and catalog continue to be read from the USB.
+
 The default model is E2B. To use E4B, run the PowerShell launcher explicitly:
 
 ```powershell
 .\\start_usb.ps1 -Model e4b
 ```
 
+Use `offload_models.cmd` to prepare a model without starting the assistant.
+Use `start_usb.cmd -NoOffload` only when you deliberately want to run the
+model directly from the USB.
+
 Use `stop_usb.cmd` to stop only processes started by the USB launcher. The
 launcher is deliberately localhost-only and has no LAN mode. If the default
 web port `8765` is already occupied, it automatically uses the first free
 fallback port from `8775` through `8790` and opens that URL.
+
+At the root of the USB, `Start OfflineAI.cmd` is a self-locating shortcut that
+finds the `AI\\OfflineAI` folder regardless of which drive letter Windows
+assigns to the USB.
 
 ## Local development
 
