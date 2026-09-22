@@ -1,0 +1,17 @@
+{
+  "apiBase": "",
+  "healthPath": "/api/health",
+  "modelsPath": "/api/models",
+  "chatPath": "/api/chat",
+  "searchPath": "/api/search",
+  "localModels": [
+    { "id": "google/gemma-4-e2b", "label": "Gemma 4 E2B (light)" },
+    { "id": "google/gemma-4-e4b", "label": "Gemma 4 E4B (stronger)" }
+  ],
+  "parameters": { "temperature": 0.2, "topP": 0.9, "maxOutputTokens": 700, "maxContextTokens": 4096, "retrievalLimit": 5 },
+  "systemPrompt": "Loaded from the local backend.",
+  "backendCommand": "",
+  "backendWorkingDirectory": "..\\app",
+  "browserUrl": "http://127.0.0.1:8765/worker-interface/",
+  "staticPort": 8765
+}

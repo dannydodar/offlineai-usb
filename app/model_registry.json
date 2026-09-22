@@ -1,0 +1,18 @@
+{
+  "models": [
+    {
+      "id": "google/gemma-4-e2b",
+      "label": "Gemma 4 E2B (light)",
+      "local_model_file": "gemma-4-E2B-it-GGUF\\gemma-4-E2B-it-Q4_K_M.gguf",
+      "context_window": 4096,
+      "default_generation": {"temperature": 0.2, "top_p": 0.9, "max_output_tokens": 700}
+    },
+    {
+      "id": "google/gemma-4-e4b",
+      "label": "Gemma 4 E4B (stronger)",
+      "local_model_file": "gemma-4-E4B-it-GGUF\\gemma-4-E4B-it-Q4_K_M.gguf",
+      "context_window": 4096,
+      "default_generation": {"temperature": 0.2, "top_p": 0.9, "max_output_tokens": 700}
+    }
+  ]
+}
