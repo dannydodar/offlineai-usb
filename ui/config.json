@@ -8,7 +8,7 @@
     { "id": "google/gemma-4-e2b", "label": "Gemma 4 E2B (light)" },
     { "id": "google/gemma-4-e4b", "label": "Gemma 4 E4B (stronger)" }
   ],
-  "parameters": { "temperature": 0.2, "topP": 0.9, "maxOutputTokens": 700, "maxContextTokens": 4096, "retrievalLimit": 5 },
+  "parameters": { "temperature": 0.2, "topP": 0.9, "maxOutputTokens": 700, "maxContextTokens": 4096, "retrievalLimit": 5, "thinking": true },
   "systemPrompt": "Loaded from the local backend.",
   "backendCommand": "",
   "backendWorkingDirectory": "..\\app",

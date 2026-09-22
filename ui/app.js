@@ -9,7 +9,7 @@
       modelsPath: '/api/models',
       chatPath: '/api/chat',
       localModels: [],
-      parameters: { temperature: 0.2, topP: 0.9, maxOutputTokens: 512, maxContextTokens: 4096, retrievalLimit: 5 },
+      parameters: { temperature: 0.2, topP: 0.9, maxOutputTokens: 512, maxContextTokens: 4096, retrievalLimit: 5, thinking: true },
       systemPrompt: ''
     },
     messages: [],
@@ -23,6 +23,8 @@
     send: document.querySelector('#sendButton'),
     model: document.querySelector('#modelSelect'),
     library: document.querySelector('#libraryToggle'),
+    libraryQuick: document.querySelector('#libraryToggleQuick'),
+    thinking: document.querySelector('#thinkingToggle'),
     clear: document.querySelector('#clearButton'),
     status: document.querySelector('#serviceStatus'),
     error: document.querySelector('#errorBox'),
@@ -36,6 +38,8 @@
     systemPrompt: document.querySelector('#systemPrompt'),
     contextBar: document.querySelector('#contextBar'),
     contextText: document.querySelector('#contextText'),
+    performance: document.querySelector('#performanceText'),
+    modelQuickLabel: document.querySelector('#modelQuickLabel'),
     parameterInputs: {
       temperature: document.querySelector('#temperature'),
       topP: document.querySelector('#topP'),
@@ -136,6 +140,16 @@
     };
   }
 
+  function performanceLabel(value) {
+    if (!value) return '';
+    const parts = [];
+    if (Number.isFinite(Number(value.tokens_per_second)) && Number(value.tokens_per_second) > 0) parts.push(`${Number(value.tokens_per_second).toFixed(1)} output tokens/s`);
+    if (Number.isFinite(Number(value.elapsed_seconds)) && Number(value.elapsed_seconds) > 0) parts.push(`${Number(value.elapsed_seconds).toFixed(1)}s`);
+    if (Number.isFinite(Number(value.output_tokens))) parts.push(`${Number(value.output_tokens).toLocaleString()} output tokens`);
+    if (Number.isFinite(Number(value.prompt_tokens))) parts.push(`${Number(value.prompt_tokens).toLocaleString()} prompt tokens`);
+    return parts.length ? `Performance · ${parts.join(' · ')}` : '';
+  }
+
   function updateContextMeter() {
     const max = Number(state.context?.maximum || els.parameterInputs.maxContextTokens.value || 0);
     const fallbackUsed = Math.ceil((state.messages.reduce((total, item) => total + text(item.content).length, 0) + text(els.prompt.value).length) / 4);
@@ -160,15 +174,33 @@
       const body = message.role === 'assistant' && !message.pending ? renderMarkdown(message.content) : `<p>${escapeHtml(message.content)}</p>`;
       node.innerHTML = `<div class="message-meta">${message.role === 'user' ? 'You' : 'OfflineAI'}</div><div class="message-content">${body}</div>`;
       if (message.role === 'assistant' && !message.pending) {
+        if (message.reasoning) {
+          const thinking = document.createElement('details');
+          thinking.className = 'thinking-block';
+          thinking.innerHTML = `<summary>Show thinking</summary><div class="thinking-content">${renderMarkdown(message.reasoning)}</div>`;
+          node.appendChild(thinking);
+        }
         const retrieval = document.createElement('div');
         retrieval.className = 'message-meta';
         retrieval.textContent = message.searchPerformed ? 'Library search performed' : `Library search skipped${message.retrievalReason ? `: ${message.retrievalReason}` : ''}`;
         node.appendChild(retrieval);
+        if (message.performance) {
+          const performance = document.createElement('div');
+          performance.className = 'message-meta performance-message';
+          performance.textContent = performanceLabel(message.performance);
+          node.appendChild(performance);
+        }
       }
       if (message.sources?.length) {
         const details = document.createElement('details');
         details.className = 'sources';
-        details.innerHTML = `<summary>${message.sources.length} source${message.sources.length === 1 ? '' : 's'}</summary>` + message.sources.map(source => `<div class="source"><div class="source-title">${escapeHtml(source.title || source.source_filename || source.path || 'Local document')} <span class="source-page">${source.pdf_page ? `p. ${escapeHtml(source.pdf_page)}` : ''}</span></div><div class="source-path">${escapeHtml(source.path || source.relative_path || '')}</div><div class="source-text">${escapeHtml(source.snippet || source.text || '')}</div></div>`).join('');
+        details.innerHTML = `<summary>${message.sources.length} source${message.sources.length === 1 ? '' : 's'}</summary>` + message.sources.map(source => {
+          const sourcePath = source.relative_path || source.path || '';
+          const page = Number(source.pdf_page);
+          const pageHash = Number.isFinite(page) && page > 0 ? `#page=${page}` : '';
+          const openUrl = `${endpoint('/api/source')}?path=${encodeURIComponent(sourcePath)}${pageHash}`;
+          return `<div class="source"><div class="source-title"><a class="source-link" href="${openUrl}" target="_blank" rel="noreferrer">Open PDF</a> ${escapeHtml(source.title || source.source_filename || sourcePath || 'Local document')} <span class="source-page">${source.pdf_page ? `p. ${escapeHtml(source.pdf_page)}` : ''}</span></div><div class="source-path">${escapeHtml(sourcePath)}</div><div class="source-text">${escapeHtml(source.snippet || source.text || '')}</div></div>`;
+        }).join('');
         node.appendChild(details);
       }
       els.chat.appendChild(node);
@@ -187,6 +219,11 @@
     els.systemPrompt.textContent = state.config.systemPrompt || 'Configured by local backend.';
     if (els.modelFolder && state.config.folder) els.modelFolder.textContent = `Models: ${state.config.folder}`;
     if (els.engineLabel && state.config.engine) els.engineLabel.textContent = `Engine: ${state.config.engine}`;
+    if (els.modelQuickLabel) {
+      const selected = (state.config.localModels || []).find(model => modelId(model) === els.model.value);
+      els.modelQuickLabel.textContent = selected ? modelLabel(selected) : 'Local model';
+    }
+    if (parameters.thinking !== undefined && els.thinking) els.thinking.checked = Boolean(parameters.thinking);
     updateContextMeter();
   }
 
@@ -198,6 +235,7 @@
     if (defaults.top_p !== undefined) els.parameterInputs.topP.value = defaults.top_p;
     if (defaults.max_output_tokens !== undefined) els.parameterInputs.maxOutputTokens.value = defaults.max_output_tokens;
     if (selected.context_window !== undefined) els.parameterInputs.maxContextTokens.value = selected.context_window;
+    if (els.modelQuickLabel) els.modelQuickLabel.textContent = modelLabel(selected);
     updateContextMeter();
   }
 
@@ -255,17 +293,22 @@
         body: JSON.stringify({
           message: content,
           model: els.model.value || undefined,
-          searchLibrary: els.library.checked,
+          thinking: els.thinking.checked,
+          searchLibrary: els.libraryQuick.checked,
           parameters: currentParameters(),
           history: state.messages.slice(0, -1).filter(item => !item.pending).map(({ role, content: itemContent }) => ({ role, content: itemContent }))
         })
       });
       pending.content = body.message || body.answer || body.response || body.text || 'The service returned no answer.';
       pending.sources = body.sources || body.documents || [];
+      pending.reasoning = body.reasoning || body.thinking || '';
+      pending.performance = body.performance || body.metrics || null;
       pending.searchPerformed = body.searchPerformed ?? body.retrieval?.performed ?? pending.sources.length > 0;
       pending.retrievalReason = body.retrieval?.reason || body.context?.skip_reason || '';
       state.context = normalizeContext(body.context || body.context_accounting || body.contextUsage || body.usage?.context);
       applyConfigMetadata(body.config || body.metadata || {});
+      if (pending.performance && els.performance) els.performance.textContent = performanceLabel(pending.performance);
+      else if (els.performance) els.performance.textContent = pending.reasoning ? 'Thinking was enabled for this answer.' : 'Answer complete.';
       delete pending.pending;
       setStatus('Service ready', 'good');
     } catch (error) {
@@ -304,6 +347,8 @@
   els.prompt.addEventListener('input', updateContextMeter);
   els.prompt.addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); els.form.requestSubmit(); } });
   els.model.addEventListener('change', applyModelDefaults);
+  els.libraryQuick.addEventListener('change', () => { els.library.checked = els.libraryQuick.checked; });
+  els.library.addEventListener('change', () => { els.libraryQuick.checked = els.library.checked; });
   els.clear.addEventListener('click', () => { state.messages = []; state.context = null; save(); showError(''); render(); });
   els.settingsButton.addEventListener('click', () => { const open = els.settingsPanel.hidden; els.settingsPanel.hidden = !open; els.settingsButton.setAttribute('aria-expanded', String(open)); });
   els.checkUpdatesButton.addEventListener('click', checkUpdates);

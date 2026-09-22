@@ -239,7 +239,7 @@ class LMStudioClient:
     def chat(self, model: str, message: str, context: list[dict[str, Any]], system_prompt: str,
              history: list[dict[str, Any]] | None = None, temperature: float = 0.2,
              top_p: float = 0.9, max_output_tokens: int = 700,
-             max_context_tokens: int = 2048) -> dict[str, Any]:
+             max_context_tokens: int = 2048, thinking: bool = True) -> dict[str, Any]:
         blocks = []
         for i, item in enumerate(context, 1):
             citation = f"filename={item['source_filename'] or 'unknown'}; relative_path={item['relative_path'] or 'unknown'}; pdf_page={item['pdf_page'] if item['pdf_page'] is not None else 'unknown'}"
@@ -250,10 +250,19 @@ class LMStudioClient:
             messages.extend(history[-8:])
         messages.append({"role": "user", "content": f"Retrieved sources:\n{joined or '(none)'}\n\nQuestion:\n{message}"})
         payload = {"model": model, "messages": messages, "temperature": temperature,
-                   "top_p": top_p, "max_tokens": max_output_tokens, "stream": False}
+                   "top_p": top_p, "max_tokens": max_output_tokens, "stream": False,
+                   "chat_template_kwargs": {"enable_thinking": bool(thinking)}}
         result = self._request("POST", "/chat/completions", payload)
         try:
-            result["answer"] = result["choices"][0]["message"]["content"]
+            message_result = result["choices"][0]["message"]
+            raw_answer = str(message_result.get("content") or "")
+            reasoning = str(message_result.get("reasoning_content") or message_result.get("thinking") or "")
+            think_match = re.search(r"<think>\s*(.*?)\s*</think>", raw_answer, flags=re.IGNORECASE | re.DOTALL)
+            if think_match:
+                reasoning = reasoning or think_match.group(1).strip()
+                raw_answer = (raw_answer[:think_match.start()] + raw_answer[think_match.end():]).strip()
+            result["answer"] = raw_answer.strip()
+            result["reasoning"] = reasoning.strip()
         except (KeyError, IndexError, TypeError) as exc:
             raise RuntimeError("LM Studio returned a malformed chat response") from exc
         return result

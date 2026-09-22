@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -17,6 +18,7 @@ HOST = "127.0.0.1"
 PORT = int(os.getenv("OFFLINEAI_PORT", "8765"))
 ROOT = Path(__file__).resolve().parent.parent
 UI_ROOT = ROOT / "ui"
+PDF_ROOT = Path(os.getenv("OFFLINEAI_PDF_ROOT", "E:\\PDF")).resolve()
 index = SearchIndex()
 lm = LMStudioClient()
 
@@ -56,6 +58,25 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
+    def _send_pdf(self, relative_path: str):
+        candidate = Path(relative_path)
+        if not candidate.is_absolute():
+            candidate = PDF_ROOT / candidate
+        resolved = candidate.resolve()
+        if PDF_ROOT not in resolved.parents or resolved.suffix.lower() != ".pdf":
+            self._send(403, {"error": "source is outside the local PDF library"})
+            return
+        if not resolved.exists() or not resolved.is_file():
+            self._send(404, {"error": "PDF source not found"})
+            return
+        raw = resolved.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/pdf")
+        self.send_header("Content-Disposition", "inline")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
     def do_GET(self):
         parsed = urlparse(self.path)
         route = parsed.path[4:] if parsed.path.startswith("/api/") else parsed.path
@@ -74,6 +95,9 @@ class Handler(BaseHTTPRequestHandler):
             config["engine"] = os.getenv("OFFLINEAI_ENGINE", "LM Studio API")
             config["version"] = __import__("update_manager").current_version()
             self._send(200, config)
+        elif route == "/source":
+            qs = parse_qs(parsed.query)
+            self._send_pdf(qs.get("path", [""])[0])
         elif route == "/update/check":
             self._send(200, check_updates())
         elif route == "/search":
@@ -122,14 +146,28 @@ class Handler(BaseHTTPRequestHandler):
                 should_search, reason = False, "retrieval limit is zero"
             context = index.search(message, retrieval_limit) if should_search else []
             system_prompt = load_system_prompt()
+            thinking = bool(body.get("thinking", True))
+            started = time.perf_counter()
             result = lm.chat(model, message, context, system_prompt, history=history,
                              temperature=temperature, top_p=top_p,
                              max_output_tokens=max_output_tokens,
-                             max_context_tokens=max_context_tokens)
+                             max_context_tokens=max_context_tokens, thinking=thinking)
+            elapsed_seconds = max(0.001, time.perf_counter() - started)
             accounting = context_accounting(system_prompt, history, context, max_context_tokens,
                                             not should_search, None if should_search else reason, message)
             sources = [{**item, "title": item.get("source_filename"), "path": item.get("relative_path"), "snippet": item.get("text")} for item in context]
+            usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
+            timings = result.get("timings") if isinstance(result.get("timings"), dict) else {}
+            prompt_tokens = usage.get("prompt_tokens", timings.get("prompt_n"))
+            output_tokens = usage.get("completion_tokens", timings.get("predicted_n"))
+            tokens_per_second = timings.get("predicted_per_second")
+            if tokens_per_second is None and output_tokens is not None:
+                tokens_per_second = float(output_tokens) / elapsed_seconds
+            performance = {"elapsed_seconds": round(elapsed_seconds, 2), "prompt_tokens": prompt_tokens,
+                           "output_tokens": output_tokens, "tokens_per_second": round(float(tokens_per_second), 1) if tokens_per_second is not None else None,
+                           "thinking": thinking}
             self._send(200, {"answer": result["answer"], "message": _add_source_references(result["answer"], context), "model": model,
+                             "reasoning": result.get("reasoning", ""), "performance": performance,
                              "sources": sources, "searchPerformed": bool(context),
                              "retrieval": {"performed": bool(context), "skipped": not bool(context), "reason": None if context else reason},
                              "context": accounting, "context_accounting": accounting, "config": model_config})
