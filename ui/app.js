@@ -37,6 +37,9 @@
     modelDownloadPanel: document.querySelector('#modelDownloadPanel'),
     downloadModelButton: document.querySelector('#downloadModelButton'),
     modelDownloadStatus: document.querySelector('#modelDownloadStatus'),
+    refreshModelButton: document.querySelector('#refreshModelButton'),
+    modelList: document.querySelector('#modelList'),
+    modelManagerStatus: document.querySelector('#modelManagerStatus'),
     engineLabel: document.querySelector('#engineLabel'),
     checkUpdatesButton: document.querySelector('#checkUpdatesButton'),
     applyUpdateButton: document.querySelector('#applyUpdateButton'),
@@ -305,6 +308,60 @@
     }
   }
 
+  async function loadModelInventory() {
+    if (!els.modelList) return;
+    try {
+      const body = await request(endpoint('/api/models/manage'));
+      els.modelList.innerHTML = '';
+      const models = body.models || [];
+      if (!models.length) {
+        els.modelList.innerHTML = '<div class="model-row-meta">No configured models found.</div>';
+        return;
+      }
+      models.forEach(model => {
+        const row = document.createElement('div');
+        row.className = 'model-row';
+        const info = document.createElement('div');
+        info.className = 'model-row-info';
+        const title = document.createElement('div');
+        title.className = 'model-row-title';
+        title.textContent = model.label || model.id;
+        const meta = document.createElement('div');
+        meta.className = `model-row-meta ${model.active ? 'model-active' : (model.installed ? '' : 'model-missing')}`;
+        const stateLabel = model.active ? 'Active' : (model.installed ? 'Installed' : 'Not installed');
+        meta.textContent = `${stateLabel} · ${formatBytes(model.size_bytes)} · ${model.location || 'model folder'}`;
+        info.append(title, meta);
+        row.appendChild(info);
+        if (model.installed) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'button secondary';
+          button.textContent = model.active ? 'In use' : 'Delete';
+          button.disabled = Boolean(model.active);
+          if (!model.active) button.addEventListener('click', () => deleteModel(model));
+          row.appendChild(button);
+        }
+        els.modelList.appendChild(row);
+      });
+    } catch (error) {
+      if (els.modelManagerStatus) els.modelManagerStatus.textContent = `Could not read model list: ${error.message}`;
+    }
+  }
+
+  async function deleteModel(model) {
+    if (!window.confirm(`Delete ${model.label || model.id} from the current model cache?`)) return;
+    if (els.modelManagerStatus) els.modelManagerStatus.textContent = `Deleting ${model.label || model.id}…`;
+    try {
+      await request(endpoint('/api/models/delete'), { method: 'POST', body: JSON.stringify({ model: model.id }) });
+      if (els.modelManagerStatus) els.modelManagerStatus.textContent = 'Model deleted from the current cache.';
+      await loadConfig();
+      applyConfigMetadata();
+      await Promise.all([loadModels(), loadModelInventory()]);
+    } catch (error) {
+      if (els.modelManagerStatus) els.modelManagerStatus.textContent = `Could not delete model: ${error.message}`;
+    }
+  }
+
   function applyModelDefaults() {
     const selected = (state.config.localModels || []).find(model => modelId(model) === els.model.value);
     if (!selected) return;
@@ -454,8 +511,9 @@
   els.checkUpdatesButton.addEventListener('click', checkUpdates);
   els.applyUpdateButton.addEventListener('click', applyUpdate);
   els.restartButton?.addEventListener('click', restartOfflineAI);
+  els.refreshModelButton?.addEventListener('click', loadModelInventory);
   els.downloadModelButton?.addEventListener('click', downloadModel);
 
   try { state.messages = JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch (_) { state.messages = []; }
-  (async () => { render(); await loadConfig(); applyConfigMetadata(); await Promise.all([checkHealth(), loadModels()]); })();
+  (async () => { render(); await loadConfig(); applyConfigMetadata(); await Promise.all([checkHealth(), loadModels(), loadModelInventory()]); })();
 })();

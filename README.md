@@ -32,6 +32,8 @@ model**. The downloader shows progress, retries interrupted transfers, and
 verifies the model before making it available.
 After installing any update, use the **Restart OfflineAI** button in Settings
 to relaunch the portable stack and load the new files.
+The Models section in Settings shows the active model, cache location, and
+file sizes, and lets you delete inactive cached models safely.
 
 ## Running the USB package
 

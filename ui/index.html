@@ -27,7 +27,13 @@
         <p class="setting-help">The model is the local AI brain. Qwen3 0.6B is the small emergency option for very limited laptops. E2B is stronger and E4B is strongest, but both need more memory. The selected model may be copied to this computer for better speed.</p>
         <label class="setting-field">Model<select id="modelSelect" aria-label="Model selection"></select></label>
         <span id="modelFolder" class="model-folder" aria-live="polite"></span>
-        <span id="engineLabel" class="model-folder" aria-live="polite"></span>
+          <span id="engineLabel" class="model-folder" aria-live="polite"></span>
+          <div class="model-manager">
+            <div class="model-manager-heading"><strong>Models on this computer</strong><button id="refreshModelButton" class="button secondary" type="button">Refresh</button></div>
+            <p class="setting-help">These are the model files in the current PC cache or USB model folder. The active model is protected. Deleting an inactive model frees disk space but does not remove the original copy elsewhere.</p>
+            <div id="modelList" class="model-list" aria-live="polite"></div>
+            <span id="modelManagerStatus" class="setting-help" role="status"></span>
+          </div>
         <div id="modelDownloadPanel" class="model-download" hidden>
           <p><strong>Need the super-light model?</strong> Download Qwen3 0.6B directly from the model host. It is about 429 MB and is checked before installation.</p>
           <button id="downloadModelButton" class="button secondary" type="button">Download super-light model</button>

@@ -13,6 +13,7 @@ from rag_backend import (DEFAULT_MODEL, LMStudioClient, SearchIndex, configured_
                          context_accounting, hardware_profile, load_model_registry,
                          load_system_prompt, retrieval_decision)
 from model_download import catalog as model_download_catalog, start_download, status as model_download_status
+from model_manager import delete_model, inventory as model_inventory
 from update_manager import apply_update, check_updates
 
 # The portable assistant is intentionally local-only. Keep the bind address
@@ -102,10 +103,12 @@ class Handler(BaseHTTPRequestHandler):
         elif route in {"/styles.css", "/app.js", "/config.json"}:
             self._send_file(UI_ROOT / route.lstrip("/"))
         elif route == "/health":
-            self._send(200, {"ok": True, "service": "offlineai-backend", "bind": HOST, "engine": os.getenv("OFFLINEAI_ENGINE", "LM Studio API"), "database": str(index.db_path), "library": os.getenv("OFFLINEAI_PDF_ROOT", "E:\\PDF")})
+            self._send(200, {"ok": True, "service": "offlineai-backend", "bind": HOST, "engine": os.getenv("OFFLINEAI_ENGINE", "LM Studio API"), "active_model": os.getenv("OFFLINEAI_ACTIVE_MODEL", ""), "database": str(index.db_path), "library": os.getenv("OFFLINEAI_PDF_ROOT", "E:\\PDF")})
         elif route == "/models":
             # Expose only the intentionally configured local model registry.
             self._send(200, load_model_registry())
+        elif route == "/models/manage":
+            self._send(200, {"models": model_inventory()})
         elif route == "/config":
             config = load_model_registry()
             config["system_prompt"] = load_system_prompt()
@@ -139,6 +142,20 @@ class Handler(BaseHTTPRequestHandler):
             return
         if route == "/model/download":
             self._send(200, start_download())
+            return
+        if route == "/models/delete":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                body = json.loads(self.rfile.read(length))
+                self._send(200, delete_model(body.get("model", "")))
+            except (json.JSONDecodeError, ValueError) as exc:
+                self._send(400, {"ok": False, "error": str(exc)})
+            except FileNotFoundError as exc:
+                self._send(404, {"ok": False, "error": str(exc)})
+            except RuntimeError as exc:
+                self._send(409, {"ok": False, "error": str(exc)})
+            except OSError as exc:
+                self._send(503, {"ok": False, "error": f"model could not be deleted: {exc}"})
             return
         if route == "/restart":
             try:
