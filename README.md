@@ -22,19 +22,16 @@ stored in the public GitHub repository. The update installer preserves them.
 
 From `AI\\OfflineAI`, double-click `start_usb.cmd`. It starts the independent
 CPU inference server and the OfflineAI backend, then opens the local web UI.
-The default model is E2B. To use E4B or expose the UI to a private LAN, run
-the PowerShell launcher explicitly:
+The default model is E2B. To use E4B, run the PowerShell launcher explicitly:
 
 ```powershell
 .\\start_usb.ps1 -Model e4b
-.\\start_usb.ps1 -Lan -Model e2b
 ```
 
 Use `stop_usb.cmd` to stop only processes started by the USB launcher. The
-normal launcher binds to localhost. `-Lan` binds the web backend to all local
-interfaces and should only be used on a trusted private network. If the
-default web port `8765` is already occupied, the launcher automatically uses
-the first free fallback port from `8775` through `8790` and opens that URL.
+launcher is deliberately localhost-only and has no LAN mode. If the default
+web port `8765` is already occupied, it automatically uses the first free
+fallback port from `8775` through `8790` and opens that URL.
 
 ## Local development
 

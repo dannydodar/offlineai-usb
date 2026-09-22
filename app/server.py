@@ -11,7 +11,9 @@ from rag_backend import (DEFAULT_MODEL, LMStudioClient, SearchIndex, configured_
                          retrieval_decision)
 from update_manager import apply_update, check_updates
 
-HOST = os.getenv("OFFLINEAI_HOST", "127.0.0.1")
+# The portable assistant is intentionally local-only. Keep the bind address
+# fixed even if a stale environment variable is present on the host laptop.
+HOST = "127.0.0.1"
 PORT = int(os.getenv("OFFLINEAI_PORT", "8765"))
 ROOT = Path(__file__).resolve().parent.parent
 UI_ROOT = ROOT / "ui"

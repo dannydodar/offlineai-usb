@@ -1,5 +1,4 @@
 param(
-    [switch]$Lan,
     [ValidateSet('e2b','e4b')]
     [string]$Model = 'e2b',
     [int]$Port = 8765
@@ -21,7 +20,7 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $runnerPidFile = Join-Path $logDir 'usb-runner.pid'
 $backendPidFile = Join-Path $logDir 'usb-backend.pid'
 $runnerPort = 1235
-$hostAddress = if ($Lan) { '0.0.0.0' } else { '127.0.0.1' }
+$hostAddress = '127.0.0.1'
 
 function Test-PortAvailable([int]$Candidate) {
     $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Candidate)
