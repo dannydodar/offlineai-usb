@@ -13,6 +13,7 @@ h1 { font-size:23px; margin:0; letter-spacing:-.02em; }
 .button { border:0; border-radius:7px; color:#07101a; cursor:pointer; font:600 14px inherit; padding:8px 14px; }.button:disabled { cursor:wait; opacity:.55; }
 .primary { background:var(--accent); }.secondary { background:var(--panel-2); color:var(--text); border:1px solid var(--line); }
 .settings-panel { flex:none; max-height:min(52dvh,460px); overflow:auto; display:flex; flex-direction:column; gap:8px; }
+.settings-panel[hidden] { display:none; }
 .controls { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:10px; background:var(--panel); border:1px solid var(--line); border-radius:10px; }
 label { color:var(--muted); font-size:13px; display:flex; align-items:center; gap:8px; }
 select, textarea, input { color:var(--text); background:var(--panel-2); border:1px solid var(--line); border-radius:7px; font:inherit; }
