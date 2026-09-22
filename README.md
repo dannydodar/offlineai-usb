@@ -1,58 +1,66 @@
 # OfflineAI USB Assistant
 
-This is the local build directory for the portable offline assistant. The USB launcher runs the UI, PDF retrieval, and inference locally without LM Studio.
+OfflineAI is a portable Windows web interface for a local assistant backed by
+the PDF library on the same USB drive. The packaged launcher uses an
+independent CPU build of `llama.cpp`; LM Studio is not required for the USB
+package.
 
-## Current status
+## Package layout
 
-- Local web interface and Python backend are integrated. Normal USB mode is localhost-only; the chat UI can be exposed to a private LAN only when deliberately launched with the LAN option.
-- The backend uses the SQLite catalog produced by the PDF worker and the compact hub/category index under `E:\PDF\indexes`.
-- LM Studio is expected at `http://127.0.0.1:1234/v1`.
-- An independent CPU mode is now available using the bundled official `llama.cpp` `llama-server.exe` and the E2B GGUF. It runs on `127.0.0.1:1235` and does not require LM Studio.
-- The USB build also includes a bundled Python runtime and can use models from its own `models` folder.
-- The Settings panel contains model selection, library retrieval, context budget, generation controls, system prompt, and update controls.
-- Default model: `google/gemma-4-e2b`.
-- E4B can be selected from the interface.
-- Only models configured in `app\model_registry.json` and found in the configured model folder are shown.
-- Greetings and ordinary conversation skip library retrieval; substantive questions search the library.
-- Parameters, the read-only system prompt, retrieval outcome, and estimated context usage are visible in the interface.
-- The source PDFs remain in `E:\PDF` and are not modified except for the requested generated `index.md`.
+The deployable folder is normally `AI\\OfflineAI` on the USB drive:
 
-## Start locally
+- `models\\` contains the local GGUF models.
+- `runtime\\` contains the portable Python runtime and `llama.cpp` runner.
+- `worker-pdf\\pdf_catalog.sqlite3` contains the private PDF catalog.
+- `..\\..\\PDF\\` is the PDF library and its compact index files.
+- `app\\` and `ui\\` are the software updated from this repository.
 
-Run `start_local.cmd`. It starts the backend and opens:
+Models, PDFs, the catalog database, and runtime binaries are intentionally not
+stored in the public GitHub repository. The update installer preserves them.
 
-`http://127.0.0.1:8765/`
+## Running the USB package
 
-Run `stop_local.cmd` to stop the background server.
+From `AI\\OfflineAI`, double-click `start_usb.cmd`. It starts the independent
+CPU inference server and the OfflineAI backend, then opens the local web UI.
+The default model is E2B. To use E4B or expose the UI to a private LAN, run
+the PowerShell launcher explicitly:
 
-Run `start_independent_stack.cmd` to run the E2B model through the bundled independent CPU runner. Run `stop_independent_stack.cmd` to stop that runner and its backend. This is the current compatibility baseline for an eventual USB package; a GPU/Vulkan runner can be added after the laptop hardware is identified.
+```powershell
+.\\start_usb.ps1 -Model e4b
+.\\start_usb.ps1 -Lan -Model e2b
+```
 
-## USB launcher
+Use `stop_usb.cmd` to stop only processes started by the USB launcher. The
+normal launcher binds to localhost. `-Lan` binds the web backend to all local
+interfaces and should only be used on a trusted private network.
 
-Run `start_usb.cmd` from the USB package. It starts the independent llama.cpp runner, the OfflineAI backend, and the browser UI. `stop_usb.cmd` stops only the processes started by the USB launcher. The `-Lan` PowerShell option can be used deliberately when a private-network test is needed.
+## Local development
 
-The update button checks the configured public GitHub repository and applies software-only updates. It preserves the local PDF database, PDFs, GGUF models, runtime, logs, and update backups.
+`start_independent_stack.cmd` runs the E2B model through the independent
+`llama.cpp` CPU runner and starts the backend on localhost. The development
+launcher expects the model and PDF paths used on the build machine; the USB
+launcher uses paths relative to the USB drive instead.
 
-## Temporary phone/LAN test
+The UI settings panel exposes model selection, retrieval limit, context window
+and response budget, temperature, Top P, the active system prompt, engine
+status, and update controls. Greetings and ordinary conversation do not query
+the PDF library. Retrieval is reserved for substantive questions and is kept
+within the selected source and context budgets.
 
-Run `start_lan.cmd` to start a separate temporary LAN listener on port `8766`. It prints the laptop's private-network URL and adds a Windows Firewall rule limited to the Private profile and LocalSubnet. On this laptop the current URL is:
+## Software updates
 
-`http://192.168.1.82:8766/`
+The Settings panel's **Check for updates** button checks the public repository
+configured in `update_config.json`. If a newer version is available, **Install
+update** downloads the GitHub branch archive and updates only software files.
+It creates a timestamped backup and preserves models, PDFs, the catalog,
+runtime, and logs. Restart the USB launcher after installing an update.
 
-The phone must be on the same Wi-Fi network. Run `stop_lan.cmd` when testing is finished; it stops only this LAN listener and removes its temporary firewall rule. The existing service on port `8765` is left untouched.
+The public software repository is:
 
-Run `rebuild_index.cmd` after adding or changing PDFs. The indexer is resumable and writes the catalog to `E:\PDF\index.md`.
+`https://github.com/dannydodar/offlineai-usb`
 
-The launcher uses a bundled runtime at `runtime\python.exe` when present, otherwise it uses the development Python runtime or `python` on PATH.
+## Rebuilding the PDF catalog
 
-## Local test checklist
-
-1. Confirm LM Studio is running its local server.
-2. Start `start_local.cmd`.
-3. Ask a question covered by the survival PDFs.
-4. Expand the displayed sources and check the filename, path, and page number.
-5. Switch between E2B and E4B.
-6. Ask something not covered by the collection and confirm the assistant expresses uncertainty.
-7. Stop the service with `stop_local.cmd`.
-
-USB packaging is intentionally not done yet. It will happen only after local testing passes.
+If the PDF library changes, rebuild the catalog with the local indexing worker
+before copying the updated database to the USB package. The PDF files and
+catalog remain local/private and are not part of the public repository.
