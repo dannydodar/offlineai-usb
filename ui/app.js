@@ -39,6 +39,8 @@
     debugOutput: document.querySelector('#debugOutput'),
     debugStatus: document.querySelector('#debugStatus'),
     debugCopyButton: document.querySelector('#debugCopyButton'),
+    quickUpdateButton: document.querySelector('#quickUpdateButton'),
+    quickUpdateStatus: document.querySelector('#quickUpdateStatus'),
     hardwareNotice: document.querySelector('#hardwareNotice'),
     modelDownloadPanel: document.querySelector('#modelDownloadPanel'),
     downloadModelButton: document.querySelector('#downloadModelButton'),
@@ -606,6 +608,49 @@
     finally { els.applyUpdateButton.disabled = false; }
   }
 
+  async function quickUpdate() {
+    if (!els.quickUpdateButton) return;
+    const button = els.quickUpdateButton;
+    button.disabled = true;
+    button.textContent = 'Checking…';
+    if (els.quickUpdateStatus) els.quickUpdateStatus.textContent = '';
+    try {
+      const check = await request(endpoint('/api/update/check'));
+      if (!check.updateAvailable) {
+        button.textContent = 'Up to date';
+        if (els.quickUpdateStatus) els.quickUpdateStatus.textContent = `v${check.currentVersion || state.config.version || ''}`;
+        button.disabled = false;
+        window.setTimeout(() => { button.textContent = 'Update'; }, 2500);
+        return;
+      }
+      button.textContent = 'Installing…';
+      const installed = await request(endpoint('/api/update/apply'), { method: 'POST', body: '{}' });
+      if (!installed.applied) throw new Error(installed.message || 'the update was not installed');
+      button.textContent = 'Restarting…';
+      if (els.quickUpdateStatus) els.quickUpdateStatus.textContent = `v${installed.latestVersion || 'new version'}`;
+      let previousInstance = '';
+      try { previousInstance = (await request(endpoint('/api/health'))).instance_id || ''; } catch (_) {}
+      await request(endpoint('/api/restart'), { method: 'POST', body: '{}' });
+      const deadline = Date.now() + 195000;
+      while (Date.now() < deadline) {
+        await new Promise(resolve => window.setTimeout(resolve, 1000));
+        try {
+          const health = await request(endpoint('/api/health'));
+          if (!previousInstance || health.instance_id !== previousInstance) {
+            button.textContent = 'Updated';
+            window.setTimeout(() => window.location.reload(), 500);
+            return;
+          }
+        } catch (_) {}
+      }
+      throw new Error('the new service did not become ready');
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = 'Update';
+      if (els.quickUpdateStatus) els.quickUpdateStatus.textContent = `Failed: ${error.message}`;
+    }
+  }
+
   async function restartOfflineAI() {
     if (!els.restartButton) return;
     els.restartButton.disabled = true;
@@ -652,6 +697,7 @@
   els.settingsButton.addEventListener('click', () => { const open = els.settingsPanel.hidden; els.settingsPanel.hidden = !open; els.settingsButton.setAttribute('aria-expanded', String(open)); });
   els.debugButton?.addEventListener('click', runDebug);
   els.debugCopyButton?.addEventListener('click', copyDebugSummary);
+  els.quickUpdateButton?.addEventListener('click', quickUpdate);
   els.checkUpdatesButton.addEventListener('click', checkUpdates);
   els.applyUpdateButton.addEventListener('click', applyUpdate);
   els.restartButton?.addEventListener('click', restartOfflineAI);
