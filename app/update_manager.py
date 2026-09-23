@@ -47,6 +47,10 @@ def _fetch(url: str, timeout: int = 15) -> bytes:
         return response.read()
 
 
+def _cache_buster() -> str:
+    return str(int(datetime.now(timezone.utc).timestamp()))
+
+
 def current_version() -> str:
     try:
         return str(_read_json(VERSION_FILE).get("version", "0.0.0"))
@@ -74,7 +78,7 @@ def check_updates() -> dict[str, Any]:
         result.update({"ok": False, "message": "Update repository is not configured yet."})
         return result
     try:
-        raw_url = f"https://raw.githubusercontent.com/{repository}/{config['branch']}/version.json"
+        raw_url = f"https://raw.githubusercontent.com/{repository}/{config['branch']}/version.json?offlineai={_cache_buster()}"
         remote = json.loads(_fetch(raw_url).decode("utf-8"))
         latest = str(remote.get("version", "0.0.0"))
         newer = _version_tuple(latest) > _version_tuple(current)
@@ -110,7 +114,7 @@ def apply_update() -> dict[str, Any]:
     }
     allow_dirs = {"app", "ui", "worker-pdf"}
     try:
-        archive = _fetch(f"https://github.com/{repository}/archive/refs/heads/{branch}.zip", timeout=60)
+        archive = _fetch(f"https://github.com/{repository}/archive/refs/heads/{branch}.zip?offlineai={_cache_buster()}", timeout=60)
         with tempfile.TemporaryDirectory(prefix="offlineai-update-") as temp:
             archive_path = Path(temp) / "update.zip"
             archive_path.write_bytes(archive)
