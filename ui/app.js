@@ -126,7 +126,7 @@
   }
 
   async function request(url, options = {}) {
-    const response = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
+    const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(190000), ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
     let body = {};
     try { body = await response.json(); } catch (_) {}
     if (!response.ok) throw new Error(body.error || `Service returned HTTP ${response.status}`);
@@ -583,6 +583,12 @@
       } catch (error) { passed = false; lines.push(`Runner: FAIL (${error.message.slice(0, 150)})`); }
       lines.unshift('Backend diagnostic: legacy fallback (the current backend has not loaded the new diagnostic)');
       try {
+        const disk = await request('config.json');
+        const restart = disk.restartDiagnostic;
+        lines.push(restart ? `Restart: ${restart.stage} (${restart.detail || 'no error recorded'})` : 'Restart: launcher has not recorded a start');
+        lines.push(`Running process: ${health?.pid || 'unknown'}; build: ${health?.backend_build || 'old'}; UI: 1.4.0`);
+      } catch (_) { lines.push('Restart record: unavailable'); }
+      try {
         config = await request(endpoint('/api/config'));
         const models = Array.isArray(config.models) ? config.models : (config.localModels || []);
         const qwen = models.find(model => modelId(model) === 'qwen/qwen3-0.6b');
@@ -646,6 +652,7 @@
     if (els.quickUpdateStatus) els.quickUpdateStatus.textContent = '';
     try {
       const check = await request(endpoint('/api/update/check'));
+      if (!check.ok) throw new Error(check.message || 'Update check failed');
       if (!check.updateAvailable) {
         button.textContent = 'Up to date';
         if (els.quickUpdateStatus) els.quickUpdateStatus.textContent = `v${check.currentVersion || state.config.version || ''}`;
@@ -660,12 +667,18 @@
       if (els.quickUpdateStatus) els.quickUpdateStatus.textContent = `v${installed.latestVersion || 'new version'}`;
       let previousInstance = '';
       try { previousInstance = (await request(endpoint('/api/health'))).instance_id || ''; } catch (_) {}
+      const restartStarted = Date.now() / 1000;
       await request(endpoint('/api/restart'), { method: 'POST', body: '{}' });
       const deadline = Date.now() + 195000;
       while (Date.now() < deadline) {
         await new Promise(resolve => window.setTimeout(resolve, 1000));
+        let restartRecord;
+        try { restartRecord = (await request('config.json', { signal: AbortSignal.timeout(3000) })).restartDiagnostic; } catch (_) {}
+        if (restartRecord?.time >= restartStarted && restartRecord.stage === 'failed') {
+          throw new Error(restartRecord.detail || 'Launcher failed');
+        }
         try {
-          const health = await request(endpoint('/api/health'));
+          const health = await request(endpoint('/api/health'), { signal: AbortSignal.timeout(3000) });
           if ((!previousInstance || health.instance_id !== previousInstance) && health.backend_build === 'runner-diagnostics-v2') {
             button.textContent = 'Updated';
             window.setTimeout(() => window.location.reload(), 500);
@@ -678,6 +691,7 @@
       button.disabled = false;
       button.textContent = 'Update';
       if (els.quickUpdateStatus) els.quickUpdateStatus.textContent = `Failed: ${error.message}`;
+      showError(`Update/restart: ${error.message}. Open Debug for the restart record.`);
     }
   }
 

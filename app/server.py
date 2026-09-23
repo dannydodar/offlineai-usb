@@ -28,6 +28,7 @@ index = SearchIndex()
 lm = LMStudioClient()
 INSTANCE_ID = uuid.uuid4().hex
 STARTED_AT = time.time()
+RUNNING_VERSION = current_version()
 
 
 def _short_debug_error(value: object, limit: int = 180) -> str:
@@ -37,7 +38,7 @@ def _short_debug_error(value: object, limit: int = 180) -> str:
 
 def _debug_report() -> dict:
     """Return a compact, user-readable local diagnostic instead of a log dump."""
-    lines = [f"OfflineAI v{current_version()}"]
+    lines = [f"Running v{RUNNING_VERSION}; installed v{current_version()}"]
     lines.append(f"Backend build: {BACKEND_BUILD}")
     passed = True
     runtime = runtime_status()
@@ -188,7 +189,8 @@ class Handler(BaseHTTPRequestHandler):
             config = load_model_registry()
             config["system_prompt"] = load_system_prompt()
             config["engine"] = os.getenv("OFFLINEAI_ENGINE", "LM Studio API")
-            config["version"] = __import__("update_manager").current_version()
+            config["version"] = RUNNING_VERSION
+            config["installed_version"] = current_version()
             config["backend_build"] = BACKEND_BUILD
             config["model_policy"] = os.getenv("OFFLINEAI_MODEL_POLICY", "normal")
             config["hardware"] = hardware_profile([item.get("id", "") for item in config.get("models", [])])

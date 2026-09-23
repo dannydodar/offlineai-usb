@@ -38,13 +38,30 @@ RUNNER="$RUNTIME_CACHE/llama-server"
 LOG_ROOT="$STATE_ROOT/logs"
 mkdir -p "$MODEL_CACHE" "$RUNTIME_CACHE" "$LOG_ROOT"
 
+exec >>"$LOG_ROOT/restart.log" 2>&1
+STAGE="preflight"
+report_stage() {
+    STAGE="$1"
+    "$PYTHON" "$ROOT/app/linux_recovery.py" report "$STAGE" "${2:-}"
+}
+on_exit() {
+    local code=$?
+    if [ "$code" -ne 0 ]; then
+        "$PYTHON" "$ROOT/app/linux_recovery.py" report failed "$STAGE: $(tail -c 500 "$LOG_ROOT/restart.log")"
+    fi
+}
+trap on_exit EXIT
+report_stage preflight
+"$PYTHON" -B -c 'import sys; sys.path.insert(0, sys.argv[1]); import server; assert server.BACKEND_BUILD == "runner-diagnostics-v2"' "$ROOT/app" || die "updated backend import failed"
+
 # This installation is intentionally Qwen-only. Remove old Gemma caches so
 # stale files cannot be selected or consume the laptop's limited storage.
 for legacy_dir in "$CACHE_ROOT/models/gemma-4-E2B-it-GGUF" "$CACHE_ROOT/models/gemma-4-E4B-it-GGUF"; do
     if [ -d "$legacy_dir" ]; then rm -rf -- "$legacy_dir"; fi
 done
 
-bash "$ROOT/stop_offlineai.sh" >/dev/null 2>&1 || true
+report_stage stopping
+bash "$ROOT/stop_offlineai.sh" || die "could not stop the owned OfflineAI processes"
 
 sha256_file() {
     if command -v sha256sum >/dev/null 2>&1; then
@@ -126,6 +143,7 @@ if ! wait_port_free "$PORT" 15; then
 fi
 
 echo "Starting the local CPU AI runner…"
+report_stage runner
 nohup "$RUNNER" \
     --model "$MODEL_TARGET" \
     --alias "$MODEL_ID" \
@@ -162,6 +180,7 @@ export OFFLINEAI_PDF_ROOT="$PDF_ROOT"
 export OFFLINEAI_DB_PATH="$DB_PATH"
 
 echo "Starting the local OfflineAI web interface…"
+report_stage backend
 nohup "$PYTHON" -u "$ROOT/app/server.py" \
     >"$LOG_ROOT/backend.log" 2>&1 &
 BACKEND_PID=$!
@@ -192,6 +211,7 @@ then
 fi
 
 URL="http://127.0.0.1:$PORT/"
+report_stage ready
 echo "OfflineAI is ready at $URL"
 echo "Logs are in $LOG_ROOT"
 if [ "$OPEN_BROWSER" = "1" ]; then

@@ -106,7 +106,7 @@ def apply_update() -> dict[str, Any]:
     # important because the Restart button runs the root launcher, while the
     # app itself is updated from the app/ directory.
     allow_files = {
-        "version.json", "update_config.json", "README.md",
+        "update_config.json", "README.md",
         "start_usb.ps1", "start_usb.cmd",
         "stop_usb.ps1", "stop_usb.cmd",
         "offload_models.ps1",
@@ -158,7 +158,12 @@ def apply_update() -> dict[str, Any]:
             for name in ("start_offlineai.sh", "stop_offlineai.sh", "install_offlineai_desktop.sh"):
                 script = ROOT / name
                 if script.is_file():
-                    script.chmod(script.stat().st_mode | 0o111)
+                    try:
+                        script.chmod(script.stat().st_mode | 0o111)
+                    except OSError:
+                        # FAT/exFAT mounts may forbid chmod. Launch through
+                        # Bash explicitly, so this is not an update failure.
+                        pass
             # Do not report a successful update if the files that fix the
             # local runner handshake were not actually installed. This turns
             # a partial or stale archive into a visible update failure rather
@@ -169,6 +174,10 @@ def apply_update() -> dict[str, Any]:
                 raise RuntimeError("the update did not install the local runner fix")
             if "clearTopButton" not in ui_text:
                 raise RuntimeError("the update did not install the current user interface")
+            # Publish the installed version only after all application files
+            # have been copied and verified.
+            shutil.copy2(VERSION_FILE, backup_root / 'version.json')
+            shutil.copy2(source_root / 'version.json', VERSION_FILE)
         return {**checked, "ok": True, "applied": True, "restartRequired": True, "message": "Update installed. Restart OfflineAI to load it."}
     except (OSError, urllib.error.URLError, TimeoutError, zipfile.BadZipFile, RuntimeError) as exc:
         return {**checked, "ok": False, "applied": False, "message": f"Update failed: {exc}"}
