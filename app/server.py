@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from rag_backend import (DEFAULT_MODEL, LMStudioClient, SearchIndex, configured_model,
+from rag_backend import (BACKEND_BUILD, DEFAULT_MODEL, LMStudioClient, SearchIndex, configured_model,
                          LIGHTWEIGHT_MODEL, context_accounting, hardware_profile, load_model_registry,
                          load_system_prompt, retrieval_decision)
 from model_download import catalog as model_download_catalog, start_download, status as model_download_status
@@ -38,6 +38,7 @@ def _short_debug_error(value: object, limit: int = 180) -> str:
 def _debug_report() -> dict:
     """Return a compact, user-readable local diagnostic instead of a log dump."""
     lines = [f"OfflineAI v{current_version()}"]
+    lines.append(f"Backend build: {BACKEND_BUILD}")
     passed = True
     runtime = runtime_status()
     runner_model = str(runtime.get("model") or "").strip()
@@ -53,25 +54,30 @@ def _debug_report() -> dict:
         qwen = next((item for item in models if item.get("id") == LIGHTWEIGHT_MODEL), None)
         if qwen:
             file_state = "file present" if qwen.get("available") else "file not visible to backend"
-            lines.append(f"Model: Qwen3 configured ({file_state})")
+            lines.append(f"Registry: Qwen3 configured ({file_state})")
         else:
             passed = False
-            lines.append("Model: FAIL (Qwen3 missing from registry)")
+            lines.append("Registry: FAIL (Qwen3 missing from backend registry)")
     except Exception as exc:
         passed = False
-        lines.append(f"Model: FAIL ({_short_debug_error(exc)})")
+        lines.append(f"Registry: FAIL ({_short_debug_error(exc)})")
 
     if runtime.get("running"):
         try:
-            lm.chat(LIGHTWEIGHT_MODEL, "Reply with exactly OK.", [], "Reply with exactly OK.",
-                    max_output_tokens=1, max_context_tokens=512, thinking=False, timeout_seconds=30)
-            lines.append("Chat probe: OK (Qwen answered locally)")
+            runner_models = lm.models()
+            runner_entries = runner_models.get("data", []) if isinstance(runner_models, dict) else []
+            runner_ids = [str(item.get("id", "")).strip() for item in runner_entries
+                          if isinstance(item, dict) and str(item.get("id", "")).strip()]
+            lines.append(f"Runner model IDs: {', '.join(runner_ids[:4]) or 'none reported'}")
+            api_model = lm.probe(LIGHTWEIGHT_MODEL)
+            lines.append(f"Model handshake: OK (Qwen ID mapped to {api_model})")
+            lines.append("Chat probe: OK (runner accepted a tiny local request)")
         except Exception as exc:
             passed = False
             lines.append(f"Chat probe: FAIL ({_short_debug_error(exc)})")
     else:
         lines.append("Chat probe: SKIPPED (runner failed above)")
-    return {"ok": passed, "summary": "\n".join(lines)}
+    return {"ok": passed, "backendBuild": BACKEND_BUILD, "summary": "\n".join(lines)}
 
 
 def _restart_launcher() -> None:
@@ -169,7 +175,7 @@ class Handler(BaseHTTPRequestHandler):
                              "instance_id": INSTANCE_ID, "started_at": STARTED_AT, "pid": os.getpid(),
                              "engine": os.getenv("OFFLINEAI_ENGINE", "LM Studio API"),
                              "active_model": os.getenv("OFFLINEAI_ACTIVE_MODEL", ""),
-                             "runner": runtime_status(), "database": str(index.db_path),
+                             "backend_build": BACKEND_BUILD, "runner": runtime_status(), "database": str(index.db_path),
                              "library": os.getenv("OFFLINEAI_PDF_ROOT", "E:\\PDF")})
         elif route == "/debug":
             self._send(200, _debug_report())
@@ -183,6 +189,7 @@ class Handler(BaseHTTPRequestHandler):
             config["system_prompt"] = load_system_prompt()
             config["engine"] = os.getenv("OFFLINEAI_ENGINE", "LM Studio API")
             config["version"] = __import__("update_manager").current_version()
+            config["backend_build"] = BACKEND_BUILD
             config["model_policy"] = os.getenv("OFFLINEAI_MODEL_POLICY", "normal")
             config["hardware"] = hardware_profile([item.get("id", "") for item in config.get("models", [])])
             config["downloadable_models"] = model_download_catalog()

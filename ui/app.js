@@ -554,6 +554,23 @@
     if (els.debugStatus) els.debugStatus.textContent = 'Running local checks…';
     els.debugOutput.textContent = 'Running local diagnostic…\nThis may take a few seconds while the CPU model answers a tiny test.';
     try {
+      // Prefer the backend-owned diagnostic. It can inspect the runner's
+      // actual /v1/models response and distinguish a stale update from an API
+      // model-ID mismatch. Older installs do not have this endpoint, so keep
+      // the compact compatibility checks below as a fallback.
+      try {
+        const report = await request(endpoint('/api/debug'));
+        if (report.backendBuild === 'runner-diagnostics-v2' && report.summary) {
+          els.debugOutput.textContent = report.summary;
+          if (els.debugCopyButton) els.debugCopyButton.disabled = false;
+          if (els.debugStatus) els.debugStatus.textContent = report.ok
+            ? 'All local checks passed.'
+            : 'A local check failed. Copy or read the short summary above.';
+          return;
+        }
+      } catch (error) {
+        if (!/HTTP 404|not found/i.test(error.message)) throw error;
+      }
       const lines = [];
       let passed = true;
       let health = null;
@@ -564,12 +581,13 @@
         if (runner.running) lines.push(`Runner: OK (${runner.model || 'local runner responded'})`);
         else { passed = false; lines.push(`Runner: FAIL (${String(runner.error || 'not responding').slice(0, 150)})`); }
       } catch (error) { passed = false; lines.push(`Runner: FAIL (${error.message.slice(0, 150)})`); }
+      lines.unshift('Backend diagnostic: legacy fallback (the current backend has not loaded the new diagnostic)');
       try {
         config = await request(endpoint('/api/config'));
         const models = Array.isArray(config.models) ? config.models : (config.localModels || []);
         const qwen = models.find(model => modelId(model) === 'qwen/qwen3-0.6b');
-        if (qwen) lines.push(`Model: Qwen3 configured${qwen.available === false ? ' (file not visible)' : ''}`);
-        else { passed = false; lines.push('Model: FAIL (Qwen3 is not in the backend registry)'); }
+        if (qwen) lines.push(`Registry: Qwen3 configured${qwen.available === false ? ' (file not visible)' : ''}`);
+        else { passed = false; lines.push('Registry: FAIL (Qwen3 is not in the backend registry)'); }
       } catch (error) { passed = false; lines.push(`Model: FAIL (${error.message.slice(0, 150)})`); }
       try {
         await request(endpoint('/api/chat'), {

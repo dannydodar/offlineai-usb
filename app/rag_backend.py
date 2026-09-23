@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent
+BACKEND_BUILD = "runner-diagnostics-v2"
 LIGHTWEIGHT_MODEL = "qwen/qwen3-0.6b"
 DEFAULT_MODEL = LIGHTWEIGHT_MODEL
 QWEN_MODEL_SPEC = {
@@ -357,6 +358,24 @@ class LMStudioClient:
             raise RuntimeError("local runner reports no loaded model")
         available = ", ".join(ids[:4])
         raise RuntimeError(f"local runner model ID mismatch; available: {available}")
+
+    def probe(self, preferred: str) -> str:
+        """Make one minimal request and return the runner's accepted model ID."""
+        api_model = self.runner_model_id(preferred)
+        payload = {
+            "model": api_model,
+            "messages": [{"role": "user", "content": "Reply with exactly OK."}],
+            "temperature": 0,
+            "top_p": 1,
+            "max_tokens": 1,
+            "stream": False,
+            "chat_template_kwargs": {"enable_thinking": False},
+        }
+        result = self._request("POST", "/chat/completions", payload, timeout_seconds=30)
+        choices = result.get("choices", []) if isinstance(result, dict) else []
+        if not choices:
+            raise RuntimeError("runner returned no choices for the diagnostic probe")
+        return api_model
 
     def chat(self, model: str, message: str, context: list[dict[str, Any]], system_prompt: str,
              history: list[dict[str, Any]] | None = None, temperature: float = 0.2,

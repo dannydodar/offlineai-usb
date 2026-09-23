@@ -49,7 +49,7 @@ def _is_allowed(model_id: str) -> bool:
 
 
 def _model_path(item: dict[str, Any]) -> Path:
-    relative = Path(str(item.get("local_model_file", "")).replace("\\\\", "/"))
+    relative = Path(str(item.get("local_model_file", "")).replace("\\", "/"))
     if relative.is_absolute():
         raise ValueError("absolute model paths are not managed by the UI")
     root = MODEL_FOLDER.resolve()

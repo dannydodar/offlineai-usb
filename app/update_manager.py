@@ -140,7 +140,7 @@ def apply_update() -> dict[str, Any]:
             # than leaving the user with an apparently updated but broken app.
             backend_text = (ROOT / "app" / "rag_backend.py").read_text(encoding="utf-8")
             ui_text = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
-            if "def runner_model_id" not in backend_text:
+            if "BACKEND_BUILD = \"runner-diagnostics-v2\"" not in backend_text or "def runner_model_id" not in backend_text:
                 raise RuntimeError("the update did not install the local runner fix")
             if "clearTopButton" not in ui_text:
                 raise RuntimeError("the update did not install the current user interface")
