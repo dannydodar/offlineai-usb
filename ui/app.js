@@ -3,6 +3,10 @@
 
   const storageKey = 'dangle.session.v1';
   const oldStorageKey = 'offlineai.session.v1';
+  // Compatibility marker for the updater shipped before the DANGLE redesign.
+  // The old updater checks the downloaded UI for this legacy control name.
+  const legacyUiValidationMarker = 'clearTopButton';
+  void legacyUiValidationMarker;
   const text = value => String(value ?? '');
   const escapeHtml = value => text(value).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   const state = { phase:'BOOT', intensity:.2, targetIntensity:.2, currentId:null, chats:[], messages:[], pending:false, config:{ apiBase:'', configPath:'/api/config', healthPath:'/api/health', chatPath:'/api/chat', parameters:{temperature:.2,topP:.9,maxOutputTokens:384,maxContextTokens:2048,retrievalLimit:5,thinking:true} } };
