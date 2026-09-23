@@ -144,7 +144,12 @@ def load_model_registry() -> dict[str, Any]:
             resolved = local_file if local_file.is_absolute() else MODEL_FOLDER / local_file
             model["local_path"] = str(resolved)
             model["available"] = resolved.exists()
-            if model["available"]:
+            # In lightweight mode the runner is the source of truth.  It may
+            # have loaded the model into the PC cache while the registry path
+            # is briefly stale (for example after an update or first-run
+            # copy). Keep Qwen selectable rather than presenting an empty
+            # model list and falling back to the old Gemma default.
+            if model["available"] or (os.getenv("OFFLINEAI_MODEL_POLICY", "").strip().lower() == "lightweight" and model.get("id") == LIGHTWEIGHT_MODEL):
                 models.append(model)
         return {"folder": str(MODEL_FOLDER), "models": models}
     except (OSError, json.JSONDecodeError) as exc:
