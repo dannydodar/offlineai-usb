@@ -172,8 +172,8 @@ def apply_update() -> dict[str, Any]:
             ui_text = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
             if f'BACKEND_BUILD = "{REQUIRED_BACKEND_BUILD}"' not in backend_text or "def runner_model_id" not in backend_text:
                 raise RuntimeError("the update did not install the local runner fix")
-            if "clearTopButton" not in ui_text:
-                raise RuntimeError("the update did not install the current user interface")
+            if "clearButton" not in ui_text:
+                raise RuntimeError("the update did not install the current Dangle user interface")
             # Publish the installed version only after all application files
             # have been copied and verified.
             shutil.copy2(VERSION_FILE, backup_root / 'version.json')

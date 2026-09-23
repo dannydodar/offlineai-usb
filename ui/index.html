@@ -3,100 +3,64 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>OfflineAI</title>
+  <meta name="theme-color" content="#050505">
+  <title>DANGLE — Offline intelligence</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main class="shell">
+  <canvas id="dataField" aria-hidden="true"></canvas>
+  <div id="boot" class="boot" aria-live="polite">
+    <div class="boot-logo-stage">
+      <img id="legacyLogo" class="legacy-logo" src="assets/old-logo.png" alt="" onerror="this.style.display='none';document.getElementById('legacyFallback').style.display='block'">
+      <div id="legacyFallback" class="legacy-fallback" aria-hidden="true">OFFLINE<span>AI</span></div>
+      <div id="shards" class="shards" aria-hidden="true"></div>
+    </div>
+    <div class="boot-data" aria-hidden="true"><span>LOCAL KNOWLEDGE SYSTEM / 01</span><span>NO NETWORK REQUIRED</span><span>INDEX: READYING</span></div>
+    <div id="bootBrand" class="boot-brand" aria-hidden="true"></div>
+  </div>
+
+  <aside id="sidebar" class="sidebar" aria-label="Conversation history">
+    <div class="sidebar-head"><div class="sidebar-label">ARCHIVE / LOCAL</div><button id="closeSidebar" class="icon-button" type="button" aria-label="Close conversation history" title="Close history">×</button></div>
+    <button id="newChat" class="new-chat" type="button"><span class="plus">＋</span> New conversation</button>
+    <div id="historyList" class="history-list"></div>
+    <div class="sidebar-foot">Stored on this device<br><span id="historyCount">0 conversations</span></div>
+  </aside>
+
+  <main id="app" class="app" data-state="BOOT">
     <header class="topbar">
-      <div>
-        <p class="eyebrow">LOCAL ASSISTANT</p>
-        <h1>OfflineAI <span id="versionBadge" class="version-badge" aria-label="Software version">checking version…</span></h1>
-      </div>
-      <div class="top-actions">
-        <div id="serviceStatus" class="status status-unknown" role="status"><span></span> Checking service…</div>
-        <button id="debugButton" class="button secondary" type="button" aria-expanded="false" aria-controls="debugPanel">Debug</button>
-        <button id="quickUpdateButton" class="button secondary" type="button">Update</button>
-        <button id="clearTopButton" class="button secondary" type="button">Clear chat</button>
-        <span id="quickUpdateStatus" class="quick-update-status" role="status" aria-live="polite"></span>
-        <button id="settingsButton" class="button secondary" type="button" aria-expanded="false" aria-controls="settingsPanel">Settings</button>
-      </div>
+      <button id="openSidebar" class="icon-button history-toggle" type="button" aria-label="Open conversation history" title="Conversation history">☰</button>
+      <div id="miniBrand" class="mini-brand" aria-label="Dangle home"></div>
+      <button id="globalSettings" class="icon-button gear" type="button" aria-expanded="false" aria-controls="globalPanel" aria-label="Open application settings" title="Application settings">⚙</button>
     </header>
+    <section id="home" class="home-view" aria-label="Dangle home"><div class="home-brand" id="homeBrand"></div><p class="home-prompt">Offline intelligence. Knowledge that survives.</p></section>
+    <section id="chatView" class="chat-view" aria-label="Conversation"><div id="chatTitle" class="chat-title"></div><div id="chatMessages" class="chat-messages" aria-live="polite"></div></section>
+    <section id="errorBox" class="error-box" hidden role="alert"></section>
 
-    <section id="settingsPanel" class="settings-panel" hidden aria-label="Assistant settings">
-      <p class="settings-intro">These controls are optional. The assistant is ready to chat using sensible settings. Change something only when you know what you want it to do.</p>
-      <div id="hardwareNotice" class="hardware-notice" hidden></div>
-      <details class="setting-block" open>
-        <summary class="setting-title">Model and speed</summary>
-        <p class="setting-help">Qwen3 0.6B is the lightweight local AI used by this laptop. Choose the model and context size directly below the chat box.</p>
-        <span id="modelFolder" class="model-folder" aria-live="polite"></span>
-          <span id="engineLabel" class="model-folder" aria-live="polite"></span>
-          <div class="model-manager">
-            <div class="model-manager-heading"><strong>Models on this computer</strong><button id="refreshModelButton" class="button secondary" type="button">Refresh</button></div>
-            <p class="setting-help">These are the model files in the current PC cache or USB model folder. The active model is protected. Deleting an inactive model frees disk space but does not remove the original copy elsewhere.</p>
-            <div id="modelList" class="model-list" aria-live="polite"></div>
-            <span id="modelManagerStatus" class="setting-help" role="status"></span>
-          </div>
-        <div id="modelDownloadPanel" class="model-download" hidden>
-          <p><strong>Need the super-light model?</strong> Download Qwen3 0.6B directly from the model host. It is about 429 MB and is checked before installation.</p>
-          <button id="downloadModelButton" class="button secondary" type="button">Download super-light model</button>
-          <span id="modelDownloadStatus" class="setting-help" role="status"></span>
-        </div>
-      </details>
-      <details class="setting-block">
-        <summary class="setting-title">PDF library</summary>
-        <p class="setting-help">When enabled, the assistant searches the local PDFs only when you explicitly mention PDFs, books, manuals, documents, sources, or ask it to look something up in the library. Ordinary questions do not search anything.</p>
-        <label class="setting-toggle"><input id="libraryToggle" type="checkbox" checked> Allow helpful PDF searches</label>
-        <label class="setting-field">Maximum source excerpts <span class="setting-hint">How many small pieces of PDFs may be used for one answer</span><input id="retrievalLimit" type="number" min="0" step="1"></label>
-      </details>
-      <details class="setting-block">
-        <summary class="setting-title">Answer and memory limits</summary>
-        <p class="setting-help">These are advanced limits. If the laptop feels slow, lower the context window or maximum response tokens. Temperature changes how creative the answer feels; Top P is another sampling limit and can normally stay at its default.</p>
-        <div class="setting-grid">
-          <label class="setting-field">Temperature <span class="setting-hint">Lower is steadier; higher is more varied</span><input id="temperature" type="number" min="0" max="2" step="0.01"></label>
-          <label class="setting-field">Top P <span class="setting-hint">Usually leave this at 0.9</span><input id="topP" type="number" min="0" max="1" step="0.01"></label>
-          <label class="setting-field">Maximum response tokens <span class="setting-hint">Maximum length of one answer</span><input id="maxOutputTokens" type="number" min="1" step="1"></label>
-          <label class="setting-field">Context window tokens <span class="setting-hint">How much conversation and source text the AI can remember at once</span><input id="maxContextTokens" type="number" min="128" step="1"></label>
-        </div>
-      </details>
-      <details class="setting-block">
-        <summary class="setting-title">Software and privacy</summary>
-        <p class="setting-help">This assistant runs locally. Your chat and PDFs are not sent to an online AI service. Software updates come from the configured public GitHub repository.</p>
-        <div class="update-row">
-          <button id="checkUpdatesButton" class="button secondary" type="button">Check for updates</button>
-          <button id="applyUpdateButton" class="button primary" type="button" hidden>Install update</button>
-          <button id="restartButton" class="button primary" type="button" hidden>Restart OfflineAI</button>
-          <span id="updateStatus" class="setting-help" role="status"></span>
-        </div>
-        <button id="clearButton" class="button secondary" type="button">Clear this conversation</button>
-        <div class="system-panel"><details><summary>Show the assistant instructions</summary><p class="setting-help">This is the read-only instruction text that guides the local assistant.</p><pre id="systemPrompt">Configured by local backend.</pre></details></div>
-      </details>
-    </section>
-
-    <section id="debugPanel" class="debug-panel" hidden aria-label="Local diagnostic">
-      <div class="debug-heading"><strong>Local diagnostic</strong><button id="debugCopyButton" class="button secondary" type="button" disabled>Copy summary</button></div>
-      <p class="setting-help">This checks the installed software, the local runner, the Qwen model, and one tiny local chat request. It does not search PDFs or contact an online AI.</p>
-      <pre id="debugOutput" class="debug-output">Press Debug to run a local test.</pre>
-      <span id="debugStatus" class="setting-help" role="status"></span>
-    </section>
-
-    <section id="errorBox" class="notice error" hidden role="alert"></section>
-    <section id="chat" class="chat" aria-live="polite" aria-label="Conversation"></section>
-
-    <form id="promptForm" class="composer">
-      <label class="sr-only" for="prompt">Message</label>
-      <div class="context-meter" aria-label="Estimated context usage"><div class="meter-track"><span id="contextBar"></span></div><span id="contextText">Context: 0 / 0 tokens (0%)</span></div>
-      <div class="quick-controls" aria-label="Simple chat controls">
-        <label class="quick-toggle"><input id="thinkingToggle" type="checkbox" checked> Thinking</label>
-        <label class="quick-toggle"><input id="libraryToggleQuick" type="checkbox" checked> Use PDF library when asked</label>
-        <label class="quick-select">Context<select id="contextQuickSelect" aria-label="Context window"><option value="512">512</option><option value="1024">1,024</option><option value="2048" selected>2,048</option><option value="4096">4,096</option></select></label>
-        <label class="quick-select">Model<select id="modelSelect" aria-label="Model selection"></select></label>
-      </div>
-      <div class="composer-input">
-        <textarea id="prompt" rows="3" placeholder="Ask the local assistant anything…" required></textarea>
-        <button id="sendButton" class="button primary" type="submit" aria-label="Send message">Send</button>
-      </div>
+    <form id="composer" class="composer" autocomplete="off">
+      <button id="aiControls" class="composer-tool" type="button" aria-expanded="false" aria-controls="aiPanel" aria-label="Open AI controls" title="AI and conversation controls"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.7 6.3 3 3M4 20l4.7-1 9.8-9.8a2.1 2.1 0 0 0-3-3L5.7 16 4 20Zm5.2-1.3 2.1 1.9M6.2 14.7l3 3"/></svg></button>
+      <label class="sr-only" for="prompt">Ask Dangle</label><textarea id="prompt" rows="1" placeholder="Ask Dangle anything…" required></textarea>
+      <button id="sendButton" class="send-button" type="submit" aria-label="Send message" title="Send message"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4.8 20 12 4 19.2 6.1 13 15 12 6.1 11 4 4.8Z"/></svg></button>
+      <div id="composerStatus" class="composer-status" aria-live="polite"></div>
     </form>
+
+    <section id="aiPanel" class="popover ai-panel" hidden aria-label="AI and conversation controls">
+      <div class="popover-head"><span>AI CONTROLS</span><button class="close-popover" data-close="aiPanel" type="button" aria-label="Close AI controls">×</button></div>
+      <label class="field-label">Model<select id="modelSelect"></select></label>
+      <div class="field-grid"><label class="field-label">Context<select id="contextSelect"><option value="512">512</option><option value="1024">1,024</option><option value="2048" selected>2,048</option><option value="4096">4,096</option></select></label><label class="field-label">Sources<input id="retrievalLimit" type="number" min="0" max="20" step="1" value="5"></label></div>
+      <label class="switch-row"><input id="thinkingToggle" type="checkbox" checked><span class="switch"></span><span>Thinking mode</span></label>
+      <label class="switch-row"><input id="libraryToggle" type="checkbox" checked><span class="switch"></span><span>Search library when useful</span></label>
+      <details class="advanced-controls"><summary>Generation limits</summary><div class="field-grid three"><label class="field-label">Temp<input id="temperature" type="number" min="0" max="2" step="0.01" value="0.2"></label><label class="field-label">Top P<input id="topP" type="number" min="0.01" max="1" step="0.01" value="0.9"></label><label class="field-label">Max output<input id="maxOutputTokens" type="number" min="1" step="1" value="384"></label></div></details>
+      <p id="modelFolder" class="panel-note"></p>
+    </section>
+
+    <section id="globalPanel" class="popover global-panel" hidden aria-label="Application settings">
+      <div class="popover-head"><span>SYSTEM / DANGLE</span><button class="close-popover" data-close="globalPanel" type="button" aria-label="Close application settings">×</button></div>
+      <div id="serviceStatus" class="service-line"><i></i><span>Checking local service…</span></div><p id="engineLabel" class="panel-note"></p><p id="versionBadge" class="panel-note"></p>
+      <div class="global-actions"><button id="checkUpdatesButton" class="panel-action" type="button">Check for updates</button><button id="applyUpdateButton" class="panel-action accent" type="button" hidden>Install update</button><button id="restartButton" class="panel-action accent" type="button" hidden>Restart Dangle</button><button id="debugButton" class="panel-action" type="button">Run local diagnostic</button><button id="clearButton" class="panel-action danger" type="button">Clear conversation</button></div>
+      <p id="updateStatus" class="panel-note" role="status"></p><div class="debug-tools"><pre id="debugOutput" class="debug-output" hidden></pre><button id="debugCopyButton" class="panel-action" type="button">Copy diagnostic</button></div>
+      <details class="model-storage"><summary>Model storage</summary><div id="modelList" class="model-list"></div><button id="refreshModelButton" class="panel-action" type="button">Refresh model list</button><button id="downloadModelButton" class="panel-action" type="button">Download lightweight model</button><p id="modelDownloadStatus" class="panel-note" role="status"></p></details>
+      <details class="system-prompt"><summary>System prompt</summary><pre id="systemPrompt">Loaded locally.</pre></details><p class="privacy-note">Offline by design. Models, conversations and library searches stay on this device.</p>
+    </section>
   </main>
   <script src="app.js" defer></script>
 </body>
