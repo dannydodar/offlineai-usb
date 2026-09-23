@@ -27,8 +27,7 @@
       <div id="hardwareNotice" class="hardware-notice" hidden></div>
       <details class="setting-block" open>
         <summary class="setting-title">Model and speed</summary>
-        <p class="setting-help">The model is the local AI brain. Qwen3 0.6B is the small emergency option for very limited laptops. E2B is stronger and E4B is strongest, but both need more memory. The selected model may be copied to this computer for better speed.</p>
-        <label class="setting-field">Model<select id="modelSelect" aria-label="Model selection"></select></label>
+        <p class="setting-help">Qwen3 0.6B is the lightweight local AI used by this laptop. Choose the model and context size directly below the chat box.</p>
         <span id="modelFolder" class="model-folder" aria-live="polite"></span>
           <span id="engineLabel" class="model-folder" aria-live="polite"></span>
           <div class="model-manager">
@@ -85,17 +84,16 @@
 
     <form id="promptForm" class="composer">
       <label class="sr-only" for="prompt">Message</label>
-      <textarea id="prompt" rows="3" placeholder="Ask the local assistant anything…" required></textarea>
+      <div class="context-meter" aria-label="Estimated context usage"><div class="meter-track"><span id="contextBar"></span></div><span id="contextText">Context: 0 / 0 tokens (0%)</span></div>
       <div class="quick-controls" aria-label="Simple chat controls">
         <label class="quick-toggle"><input id="thinkingToggle" type="checkbox" checked> Thinking</label>
         <label class="quick-toggle"><input id="libraryToggleQuick" type="checkbox" checked> Use PDF library when asked</label>
-        <span id="modelQuickLabel" class="quick-model" aria-live="polite">Local model</span>
+        <label class="quick-select">Context<select id="contextQuickSelect" aria-label="Context window"><option value="512">512</option><option value="1024">1,024</option><option value="2048" selected>2,048</option><option value="4096">4,096</option></select></label>
+        <label class="quick-select">Model<select id="modelSelect" aria-label="Model selection"></select></label>
       </div>
-      <div class="context-meter" aria-label="Estimated context usage"><div class="meter-track"><span id="contextBar"></span></div><span id="contextText">Context: 0 / 0 tokens (0%)</span></div>
-      <div id="performanceText" class="performance" aria-live="polite">Ready for a local conversation.</div>
-      <div class="composer-footer">
-        <span id="helperText">Enter to send · Shift+Enter for a new line</span>
-        <button id="sendButton" class="button primary" type="submit">Send</button>
+      <div class="composer-input">
+        <textarea id="prompt" rows="3" placeholder="Ask the local assistant anything…" required></textarea>
+        <button id="sendButton" class="button primary" type="submit" aria-label="Send message">Send</button>
       </div>
     </form>
   </main>

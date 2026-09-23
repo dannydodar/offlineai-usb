@@ -56,6 +56,7 @@
     systemPrompt: document.querySelector('#systemPrompt'),
     contextBar: document.querySelector('#contextBar'),
     contextText: document.querySelector('#contextText'),
+    contextQuickSelect: document.querySelector('#contextQuickSelect'),
     performance: document.querySelector('#performanceText'),
     modelQuickLabel: document.querySelector('#modelQuickLabel'),
     parameterInputs: {
@@ -245,6 +246,7 @@
     if (meta.hardware) state.config.hardware = meta.hardware;
     const parameters = { ...(state.config.parameters || {}), ...(hardware.parameters || {}), ...(meta.parameters || {}) };
     Object.entries(els.parameterInputs).forEach(([key, input]) => { if (parameters[key] !== undefined) input.value = parameters[key]; });
+    syncContextQuickSelect();
     els.systemPrompt.textContent = state.config.systemPrompt || 'Configured by local backend.';
     if (els.modelFolder && state.config.folder) els.modelFolder.textContent = `Models: ${state.config.folder}`;
     if (els.engineLabel && state.config.engine) {
@@ -430,8 +432,17 @@
       if (input && value !== undefined) input.value = value;
     });
     if (hardwareParameters.thinking !== undefined && els.thinking) els.thinking.checked = Boolean(hardwareParameters.thinking);
-    if (els.modelQuickLabel) els.modelQuickLabel.textContent = modelLabel(selected);
+    syncContextQuickSelect();
     updateContextMeter();
+  }
+
+  function syncContextQuickSelect() {
+    if (!els.contextQuickSelect) return;
+    const value = String(els.parameterInputs.maxContextTokens.value || '2048');
+    if (![...els.contextQuickSelect.options].some(option => option.value === value)) {
+      els.contextQuickSelect.add(new Option(Number(value).toLocaleString(), value));
+    }
+    els.contextQuickSelect.value = value;
   }
 
   function loadConfiguredModels() {
@@ -691,6 +702,7 @@
   els.prompt.addEventListener('input', updateContextMeter);
   els.prompt.addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); els.form.requestSubmit(); } });
   els.model.addEventListener('change', applyModelDefaults);
+  els.contextQuickSelect?.addEventListener('change', () => { els.parameterInputs.maxContextTokens.value = els.contextQuickSelect.value; updateContextMeter(); });
   els.libraryQuick.addEventListener('change', () => { els.library.checked = els.libraryQuick.checked; });
   els.library.addEventListener('change', () => { els.libraryQuick.checked = els.library.checked; });
   els.clear.addEventListener('click', () => { state.messages = []; state.context = null; save(); showError(''); render(); });
