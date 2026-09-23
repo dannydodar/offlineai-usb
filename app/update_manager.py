@@ -152,6 +152,13 @@ def apply_update() -> dict[str, Any]:
                         shutil.copy2(target, backup_target)
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(source_file, target)
+            # ZIP extraction does not reliably preserve Unix executable bits.
+            # Restore them explicitly so desktop launchers and manual starts
+            # work after a GitHub update.
+            for name in ("start_offlineai.sh", "stop_offlineai.sh", "install_offlineai_desktop.sh"):
+                script = ROOT / name
+                if script.is_file():
+                    script.chmod(script.stat().st_mode | 0o111)
             # Do not report a successful update if the files that fix the
             # local runner handshake were not actually installed. This turns
             # a partial or stale archive into a visible update failure rather

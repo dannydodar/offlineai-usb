@@ -44,7 +44,7 @@ for legacy_dir in "$CACHE_ROOT/models/gemma-4-E2B-it-GGUF" "$CACHE_ROOT/models/g
     if [ -d "$legacy_dir" ]; then rm -rf -- "$legacy_dir"; fi
 done
 
-"$ROOT/stop_offlineai.sh" >/dev/null 2>&1 || true
+bash "$ROOT/stop_offlineai.sh" >/dev/null 2>&1 || true
 
 sha256_file() {
     if command -v sha256sum >/dev/null 2>&1; then
@@ -142,7 +142,7 @@ printf '%s\n' "$RUNNER_PID" > "$STATE_ROOT/runner.pid"
 if ! wait_http "http://127.0.0.1:$RUNNER_PORT/health" 180; then
     echo "The AI runner did not become ready. Its log is: $LOG_ROOT/runner.log" >&2
     tail -n 30 "$LOG_ROOT/runner.log" 2>/dev/null || true
-    "$ROOT/stop_offlineai.sh" >/dev/null 2>&1 || true
+    bash "$ROOT/stop_offlineai.sh" >/dev/null 2>&1 || true
     exit 1
 fi
 
@@ -169,7 +169,7 @@ printf '%s\n' "$BACKEND_PID" > "$STATE_ROOT/backend.pid"
 if ! wait_http "http://127.0.0.1:$PORT/api/health" 30; then
     echo "The OfflineAI interface did not become ready. Its log is: $LOG_ROOT/backend.log" >&2
     tail -n 30 "$LOG_ROOT/backend.log" 2>/dev/null || true
-    "$ROOT/stop_offlineai.sh" >/dev/null 2>&1 || true
+    bash "$ROOT/stop_offlineai.sh" >/dev/null 2>&1 || true
     exit 1
 fi
 
@@ -187,7 +187,7 @@ except Exception:
 PY
 then
     echo "The OfflineAI port is responding, but the installed backend build is not current." >&2
-    "$ROOT/stop_offlineai.sh" >/dev/null 2>&1 || true
+    bash "$ROOT/stop_offlineai.sh" >/dev/null 2>&1 || true
     exit 1
 fi
 
