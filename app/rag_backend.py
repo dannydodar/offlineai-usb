@@ -12,9 +12,8 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent
-DEFAULT_MODEL = "google/gemma-4-e2b"
-E4B_MODEL = "google/gemma-4-e4b"
 LIGHTWEIGHT_MODEL = "qwen/qwen3-0.6b"
+DEFAULT_MODEL = LIGHTWEIGHT_MODEL
 LM_BASE = os.getenv("OFFLINEAI_LM_BASE", "http://127.0.0.1:1234/v1").rstrip("/")
 DEFAULT_DB = Path(os.getenv("OFFLINEAI_DB_PATH", str(ROOT.parent / "data" / "documents.db")))
 MAX_CONTEXT_CHARS = int(os.getenv("OFFLINEAI_MAX_CONTEXT_CHARS", "9000"))
@@ -63,15 +62,9 @@ def hardware_profile(available_model_ids: list[str] | None = None) -> dict[str, 
     memory_gb = total_memory / (1024 ** 3) if total_memory else 0
     low_resource = bool(memory_gb and memory_gb <= 6) or (logical_processors <= 4 and bool(memory_gb and memory_gb <= 8))
     available = set(available_model_ids or [])
-    active_model = os.getenv("OFFLINEAI_ACTIVE_MODEL", "").strip()
-    if not active_model:
-        engine = os.getenv("OFFLINEAI_ENGINE", "").lower()
-        if "gemma-4-e4b" in engine or "e4b" in engine:
-            active_model = E4B_MODEL
-        elif "gemma-4-e2b" in engine or "e2b" in engine:
-            active_model = DEFAULT_MODEL
+    active_model = os.getenv("OFFLINEAI_ACTIVE_MODEL", "").strip() or DEFAULT_MODEL
     if low_resource:
-        preferred = active_model if active_model in available else ("qwen/qwen3-0.6b" if "qwen/qwen3-0.6b" in available else DEFAULT_MODEL)
+        preferred = active_model if active_model in available else (LIGHTWEIGHT_MODEL if LIGHTWEIGHT_MODEL in available else DEFAULT_MODEL)
         return {
             "id": "low-resource",
             "label": "Low-resource mode",
@@ -88,7 +81,7 @@ def hardware_profile(available_model_ids: list[str] | None = None) -> dict[str, 
                 "thinking": False,
             },
         }
-    preferred = LIGHTWEIGHT_MODEL if os.getenv("OFFLINEAI_MODEL_POLICY", "").strip().lower() == "lightweight" and LIGHTWEIGHT_MODEL in available else (active_model if active_model in available else DEFAULT_MODEL)
+    preferred = LIGHTWEIGHT_MODEL if LIGHTWEIGHT_MODEL in available else (active_model if active_model in available else DEFAULT_MODEL)
     return {
         "id": "standard",
         "label": "Standard mode",
@@ -148,7 +141,7 @@ def load_model_registry() -> dict[str, Any]:
             # have loaded the model into the PC cache while the registry path
             # is briefly stale (for example after an update or first-run
             # copy). Keep Qwen selectable rather than presenting an empty
-            # model list and falling back to the old Gemma default.
+            # model list and falling back to an unavailable default.
             if model["available"] or (os.getenv("OFFLINEAI_MODEL_POLICY", "").strip().lower() == "lightweight" and model.get("id") == LIGHTWEIGHT_MODEL):
                 models.append(model)
         return {"folder": str(MODEL_FOLDER), "models": models}

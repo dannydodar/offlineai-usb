@@ -1,24 +1,10 @@
 {
   "models": [
     {
-      "id": "google/gemma-4-e2b",
-      "label": "Gemma 4 E2B (light)",
-      "local_model_file": "gemma-4-E2B-it-GGUF\\gemma-4-E2B-it-Q4_K_M.gguf",
-      "context_window": 4096,
-      "default_generation": {"temperature": 0.2, "top_p": 0.9, "max_output_tokens": 700}
-    },
-    {
-      "id": "google/gemma-4-e4b",
-      "label": "Gemma 4 E4B (stronger)",
-      "local_model_file": "gemma-4-E4B-it-GGUF\\gemma-4-E4B-it-Q4_K_M.gguf",
-      "context_window": 4096,
-      "default_generation": {"temperature": 0.2, "top_p": 0.9, "max_output_tokens": 700}
-    },
-    {
       "id": "qwen/qwen3-0.6b",
       "label": "Qwen3 0.6B (super-light)",
       "local_model_file": "qwen3-0.6b\\Qwen3-0.6B-Q4_0.gguf",
-      "context_window": 4096,
+      "context_window": 2048,
       "default_generation": {"temperature": 0.7, "top_p": 0.8, "max_output_tokens": 384}
     }
   ]

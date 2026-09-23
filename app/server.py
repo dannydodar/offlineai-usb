@@ -45,19 +45,14 @@ def _restart_launcher() -> None:
     launcher = ROOT / "start_usb.ps1"
     if not launcher.is_file():
         raise RuntimeError("portable launcher not found; restart OfflineAI manually")
-    active = os.getenv("OFFLINEAI_ACTIVE_MODEL", "")
-    lightweight_only = os.getenv("OFFLINEAI_MODEL_POLICY", "").strip().lower() == "lightweight"
-    model = {"google/gemma-4-e2b": "e2b", "google/gemma-4-e4b": "e4b", "qwen/qwen3-0.6b": "qwen3"}.get(active, "qwen3" if lightweight_only else "auto")
     try:
         launcher_text = launcher.read_text(encoding="utf-8", errors="ignore")
     except OSError:
         launcher_text = ""
-    supports_auto = "'auto'" in launcher_text and "ValidateSet" in launcher_text
     supports_qwen = "qwen3" in launcher_text
-    if model == "auto" and not supports_auto:
-        model = "e2b"
-    if model == "qwen3" and not supports_qwen:
+    if not supports_qwen:
         raise RuntimeError("the USB launcher is too old to restart lightweight mode; install the latest update and relaunch OfflineAI")
+    model = "qwen3"
     command = ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(launcher), "-Model", model, "-Port", port]
     flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
     subprocess.Popen(command, cwd=str(ROOT), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,

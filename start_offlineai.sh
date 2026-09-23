@@ -38,6 +38,12 @@ RUNNER="$RUNTIME_CACHE/llama-server"
 LOG_ROOT="$STATE_ROOT/logs"
 mkdir -p "$MODEL_CACHE" "$RUNTIME_CACHE" "$LOG_ROOT"
 
+# This installation is intentionally Qwen-only. Remove old Gemma caches so
+# stale files cannot be selected or consume the laptop's limited storage.
+for legacy_dir in "$CACHE_ROOT/models/gemma-4-E2B-it-GGUF" "$CACHE_ROOT/models/gemma-4-E4B-it-GGUF"; do
+    if [ -d "$legacy_dir" ]; then rm -rf -- "$legacy_dir"; fi
+done
+
 "$ROOT/stop_offlineai.sh" >/dev/null 2>&1 || true
 
 sha256_file() {
