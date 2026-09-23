@@ -94,6 +94,37 @@ PY
     return 1
 }
 
+wait_port_free() {
+    local port="$1"
+    local attempts="${2:-15}"
+    local n=0
+    while [ "$n" -lt "$attempts" ]; do
+        if "$PYTHON" - "$port" <<'PY'
+import socket, sys
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+try:
+    sock.bind(("127.0.0.1", int(sys.argv[1])))
+except OSError:
+    raise SystemExit(1)
+finally:
+    sock.close()
+raise SystemExit(0)
+PY
+        then return 0; fi
+        n=$((n + 1))
+        sleep 1
+    done
+    return 1
+}
+
+if ! wait_port_free "$RUNNER_PORT" 15; then
+    die "the local runner port $RUNNER_PORT is still occupied after stopping OfflineAI"
+fi
+if ! wait_port_free "$PORT" 15; then
+    die "the OfflineAI port $PORT is still occupied after stopping OfflineAI"
+fi
+
 echo "Starting the local CPU AI runner…"
 nohup "$RUNNER" \
     --model "$MODEL_TARGET" \
@@ -138,6 +169,24 @@ printf '%s\n' "$BACKEND_PID" > "$STATE_ROOT/backend.pid"
 if ! wait_http "http://127.0.0.1:$PORT/api/health" 30; then
     echo "The OfflineAI interface did not become ready. Its log is: $LOG_ROOT/backend.log" >&2
     tail -n 30 "$LOG_ROOT/backend.log" 2>/dev/null || true
+    "$ROOT/stop_offlineai.sh" >/dev/null 2>&1 || true
+    exit 1
+fi
+
+# A stale process must never make the launcher report success. Confirm that
+# this installation's backend, rather than an older process on the port, is
+# serving the build marker expected by the current package.
+if ! "$PYTHON" - "http://127.0.0.1:$PORT/api/health" <<'PY'
+import json, sys, urllib.request
+try:
+    with urllib.request.urlopen(sys.argv[1], timeout=3) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    raise SystemExit(0 if payload.get("backend_build") == "runner-diagnostics-v2" else 1)
+except Exception:
+    raise SystemExit(1)
+PY
+then
+    echo "The OfflineAI port is responding, but the installed backend build is not current." >&2
     "$ROOT/stop_offlineai.sh" >/dev/null 2>&1 || true
     exit 1
 fi
