@@ -47,7 +47,7 @@
       <label class="field-label">Model<select id="modelSelect"></select></label>
       <div class="field-grid"><label class="field-label">Context<select id="contextSelect"><option value="512">512</option><option value="1024">1,024</option><option value="2048" selected>2,048</option><option value="4096">4,096</option></select></label><label class="field-label">Sources<input id="retrievalLimit" type="number" min="0" max="20" step="1" value="5"></label></div>
       <label class="switch-row"><input id="thinkingToggle" type="checkbox" checked><span class="switch"></span><span>Thinking mode</span></label>
-      <label class="switch-row"><input id="libraryToggle" type="checkbox" checked><span class="switch"></span><span>Search library when useful</span></label>
+      <label class="switch-row"><input id="libraryToggle" type="checkbox" checked><span class="switch"></span><span>Search PDF library</span></label>
       <details class="advanced-controls"><summary>Generation limits</summary><div class="field-grid three"><label class="field-label">Temp<input id="temperature" type="number" min="0" max="2" step="0.01" value="0.2"></label><label class="field-label">Top P<input id="topP" type="number" min="0.01" max="1" step="0.01" value="0.9"></label><label class="field-label">Max output<input id="maxOutputTokens" type="number" min="1" step="1" value="384"></label></div></details>
       <p id="modelFolder" class="panel-note"></p>
     </section>
@@ -58,6 +58,7 @@
       <div class="global-actions"><button id="checkUpdatesButton" class="panel-action" type="button">Check for updates</button><button id="applyUpdateButton" class="panel-action accent" type="button" hidden>Install update</button><button id="restartButton" class="panel-action accent" type="button" hidden>Restart Dangle</button><button id="debugButton" class="panel-action" type="button">Run local diagnostic</button><button id="clearButton" class="panel-action danger" type="button">Clear conversation</button></div>
       <p id="updateStatus" class="panel-note" role="status"></p><div class="debug-tools"><pre id="debugOutput" class="debug-output" hidden></pre><button id="debugCopyButton" class="panel-action" type="button">Copy diagnostic</button></div>
       <details class="model-storage"><summary>Model storage</summary><div id="modelList" class="model-list"></div><button id="refreshModelButton" class="panel-action" type="button">Refresh model list</button><button id="downloadModelButton" class="panel-action" type="button">Download lightweight model</button><p id="modelDownloadStatus" class="panel-note" role="status"></p></details>
+      <details class="library-storage"><summary>PDF library cache</summary><button id="cacheLibraryButton" class="panel-action" type="button">Cache PDF library locally</button><p id="cacheLibraryStatus" class="panel-note" role="status"></p></details>
       <details class="system-prompt"><summary>System prompt</summary><pre id="systemPrompt">Loaded locally.</pre></details><p class="privacy-note">Offline by design. Models, conversations and library searches stay on this device.</p>
     </section>
   </main>

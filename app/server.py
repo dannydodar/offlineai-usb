@@ -15,6 +15,8 @@ from rag_backend import (BACKEND_BUILD, DEFAULT_MODEL, LMStudioClient, SearchInd
                          load_system_prompt, retrieval_decision)
 from model_download import catalog as model_download_catalog, start_download, status as model_download_status
 from model_manager import delete_model, inventory as model_inventory, runtime_status
+from library_cache import (active_catalog as active_pdf_catalog, active_root as active_pdf_root,
+                            start as start_pdf_cache, status as pdf_cache_status)
 from update_manager import apply_update, check_updates, current_version
 
 # The portable assistant is intentionally local-only. Keep the bind address
@@ -25,10 +27,15 @@ ROOT = Path(__file__).resolve().parent.parent
 UI_ROOT = ROOT / "ui"
 PDF_ROOT = Path(os.getenv("OFFLINEAI_PDF_ROOT", "E:\\PDF")).resolve()
 index = SearchIndex()
+INDEX_SOURCE_DB = index.db_path
 lm = LMStudioClient()
 INSTANCE_ID = uuid.uuid4().hex
 STARTED_AT = time.time()
 RUNNING_VERSION = current_version()
+
+
+def _refresh_index_path() -> None:
+    index.db_path = active_pdf_catalog(PDF_ROOT, INDEX_SOURCE_DB)
 
 
 def _short_debug_error(value: object, limit: int = 180) -> str:
@@ -148,11 +155,12 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def _send_pdf(self, relative_path: str):
+        source_root = active_pdf_root(PDF_ROOT)
         candidate = Path(relative_path)
         if not candidate.is_absolute():
-            candidate = PDF_ROOT / candidate
+            candidate = source_root / candidate
         resolved = candidate.resolve()
-        if PDF_ROOT not in resolved.parents or resolved.suffix.lower() != ".pdf":
+        if source_root not in resolved.parents or resolved.suffix.lower() != ".pdf":
             self._send(403, {"error": "source is outside the local PDF library"})
             return
         if not resolved.exists() or not resolved.is_file():
@@ -169,6 +177,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         route = parsed.path[4:] if parsed.path.startswith("/api/") else parsed.path
+        _refresh_index_path()
         if route in {"", "/", "/index.html"}:
             self._send_file(UI_ROOT / "index.html")
         elif route in {"/styles.css", "/app.js", "/config.json"}:
@@ -182,7 +191,7 @@ class Handler(BaseHTTPRequestHandler):
                              "active_model": os.getenv("OFFLINEAI_ACTIVE_MODEL", ""),
                              "backend_build": BACKEND_BUILD, "runner": runtime_status(), "database": str(index.db_path),
                          "database_configured": str(index.requested_db_path),
-                             "library": os.getenv("OFFLINEAI_PDF_ROOT", "E:\\PDF")})
+                             "library": str(active_pdf_root(PDF_ROOT)), "pdf_cache": pdf_cache_status(PDF_ROOT, INDEX_SOURCE_DB)})
         elif route == "/debug":
             self._send(200, _debug_report())
         elif route == "/models":
@@ -190,6 +199,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, load_model_registry())
         elif route == "/models/manage":
             self._send(200, {"models": model_inventory(), "runtime": runtime_status()})
+        elif route == "/library/cache/status":
+            self._send(200, pdf_cache_status(PDF_ROOT, INDEX_SOURCE_DB))
         elif route == "/config":
             config = load_model_registry()
             config["system_prompt"] = load_system_prompt()
@@ -228,6 +239,12 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/model/download":
             self._send(200, start_download())
             return
+        if route == "/library/cache":
+            try:
+                self._send(200, start_pdf_cache(PDF_ROOT, INDEX_SOURCE_DB))
+            except (OSError, RuntimeError) as exc:
+                self._send(409, {"ok": False, "error": str(exc)})
+            return
         if route == "/models/delete":
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -262,6 +279,7 @@ class Handler(BaseHTTPRequestHandler):
         if route != "/chat":
             self._send(404, {"error": "not found"}); return
         try:
+            _refresh_index_path()
             length = int(self.headers.get("Content-Length", "0"))
             body = json.loads(self.rfile.read(length))
             message = str(body.get("message", "")).strip()
@@ -287,11 +305,16 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("history must be a list")
             history = [item for item in history if isinstance(item, dict) and item.get("role") in {"user", "assistant"} and str(item.get("content", "")).strip()][-8:]
             search_enabled = bool(body.get("searchLibrary", True))
-            should_search, reason = retrieval_decision(message) if search_enabled else (False, "library search disabled by user")
+            should_search, reason = retrieval_decision(message) if search_enabled else (False, "PDF library search disabled")
             if should_search and retrieval_limit <= 0:
                 should_search, reason = False, "retrieval limit is zero"
             context = index.search(message, retrieval_limit) if should_search else []
+            retrieval_reason = None if context else ("No matching PDF passages found" if should_search else reason)
             system_prompt = load_system_prompt()
+            if should_search:
+                system_prompt += "\nFor this request, PDF library search is enabled; use the supplied passages when relevant."
+            else:
+                system_prompt += "\nFor this request, PDF library search is disabled; answer without library retrieval."
             thinking = bool(body.get("thinking", True))
             started = time.perf_counter()
             result = lm.chat(model, message, context, system_prompt, history=history,
@@ -314,8 +337,9 @@ class Handler(BaseHTTPRequestHandler):
                            "thinking": thinking}
             self._send(200, {"answer": result["answer"], "message": _add_source_references(result["answer"], context), "model": model,
                              "reasoning": result.get("reasoning", ""), "performance": performance,
-                             "sources": sources, "searchPerformed": bool(context),
-                             "retrieval": {"performed": bool(context), "skipped": not bool(context), "reason": None if context else reason},
+                             "sources": sources, "searchPerformed": should_search, "resultsFound": bool(context),
+                             "searchAttempted": should_search,
+                             "retrieval": {"performed": bool(context), "attempted": should_search, "skipped": not should_search, "reason": retrieval_reason},
                              "context": accounting, "context_accounting": accounting, "config": model_config})
         except (json.JSONDecodeError, ValueError) as exc:
             self._send(400, {"error": str(exc)})

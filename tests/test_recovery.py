@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import urllib.request
 import zipfile
@@ -16,6 +17,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'app'))
 import linux_recovery
+import library_cache
 import server
 import update_manager
 
@@ -89,6 +91,25 @@ class RecoveryTests(unittest.TestCase):
             resolved = server.SearchIndex._resolve_catalog_path(configured)
             self.assertEqual(resolved, actual_db)
 
+    def test_pdf_cache_copies_documents_and_catalog_before_switching(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'usb-pdf'
+            source.mkdir()
+            (source / 'first-aid.pdf').write_bytes(b'%PDF-1.4 test')
+            catalog = root / 'pdf_catalog.sqlite3'
+            catalog.write_bytes(b'sqlite catalog')
+            cache = root / 'cache'
+            with patch.dict(os.environ, {'OFFLINEAI_PDF_CACHE': str(cache)}):
+                self.assertEqual(library_cache.active_root(source), source)
+                library_cache.start(source, catalog)
+                for _ in range(20):
+                    if library_cache.status(source, catalog)['status'] == 'complete':
+                        break
+                    time.sleep(0.05)
+                self.assertTrue((cache / 'first-aid.pdf').is_file())
+                self.assertEqual(library_cache.active_catalog(source, catalog), cache / library_cache.CACHE_CATALOG)
+
     def test_chat_and_debug_over_http(self):
         class Runner(BaseHTTPRequestHandler):
             def do_GET(self):
@@ -120,6 +141,10 @@ class RecoveryTests(unittest.TestCase):
                 self.assertEqual(request('/api/config')['models'][0]['id'], 'qwen/qwen3-0.6b')
                 self.assertTrue(request('/api/debug')['ok'])
                 self.assertEqual(request('/api/chat', {'message': 'Hi', 'searchLibrary': False})['answer'], 'OK')
+                enabled = request('/api/chat', {'message': 'find me a PDF on cleaning a cut', 'searchLibrary': True, 'thinking': False})
+                self.assertTrue(enabled['searchAttempted'])
+                self.assertFalse(enabled['retrieval']['skipped'])
+                self.assertTrue(server.retrieval_decision('find me a PDF on cleaning a cut')[0])
                 with urllib.request.urlopen(base + '/assets/old-logo.png', timeout=5) as response:
                     self.assertEqual(response.status, 200)
                     self.assertEqual(response.headers.get_content_type(), 'image/png')

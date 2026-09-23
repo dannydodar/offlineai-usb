@@ -36,6 +36,12 @@ LIBRARY_REQUEST_TERMS = {
     "document", "documents", "library", "libraries", "source", "sources",
     "reference", "references", "according",
 }
+SEARCH_STOP_WORDS = {
+    "about", "after", "also", "and", "are", "been", "before", "being", "can", "could", "does", "doing",
+    "for", "from", "find", "have", "help", "how", "into", "just", "look", "looking", "me", "more", "need",
+    "onto", "please", "pdf", "search", "should", "tell", "that", "the", "their", "them", "there", "these",
+    "this", "through", "what", "when", "where", "which", "with", "would", "your",
+}
 
 
 def _total_memory_bytes() -> int:
@@ -113,7 +119,7 @@ def _quote_ident(value: str) -> str:
 
 
 def retrieval_decision(message: str) -> tuple[bool, str]:
-    """Return whether a message has purposeful information intent."""
+    """Return whether a substantive message should use the enabled PDF search."""
     normalized = re.sub(r"[^\w\s?]", "", (message or "").strip().lower())
     normalized = re.sub(r"\s+", " ", normalized).strip().rstrip("?")
     if not normalized:
@@ -124,9 +130,7 @@ def retrieval_decision(message: str) -> tuple[bool, str]:
         return False, "short conversational message"
     if normalized.startswith(("can you help", "could you help", "tell me about yourself")) and len(normalized.split()) <= 8:
         return False, "general conversational message"
-    if not any(term in normalized.split() for term in LIBRARY_REQUEST_TERMS) and not any(phrase in normalized for phrase in ("look up in", "search the collection", "search my collection", "what do the documents say", "what do the books say")):
-        return False, "no explicit library request"
-    return True, "explicit library request"
+    return True, "PDF library search enabled"
 
 
 def load_model_registry() -> dict[str, Any]:
@@ -270,9 +274,16 @@ class SearchIndex:
     @staticmethod
     def _tokens(query: str) -> list[str]:
         words = re.findall(r"[A-Za-z0-9_]{2,}", query.lower())
-        stop = {"what", "where", "when", "which", "with", "from", "that", "this", "does", "have", "about", "into", "are", "the", "and", "for", "how", "can", "could", "would", "should", "tell", "please"}
         seen: set[str] = set()
-        return [word for word in words if word not in stop and not (word in seen or seen.add(word))][:24]
+        tokens = [word for word in words if word not in SEARCH_STOP_WORDS and not (word in seen or seen.add(word))][:16]
+        expanded = []
+        for token in tokens:
+            expanded.append(token)
+            if token.endswith("ing") and len(token) > 5:
+                expanded.append(token[:-3])
+            elif token.endswith("s") and len(token) > 4:
+                expanded.append(token[:-1])
+        return list(dict.fromkeys(expanded))[:24]
 
     @staticmethod
     def _snippet(text: str, tokens: list[str], width: int = 900) -> str:
@@ -297,7 +308,15 @@ class SearchIndex:
         try:
             tables = set(self._tables(con))
             if {"page_fts", "pages", "documents"}.issubset(tables):
-                fts_query = " OR ".join(f'"{token}"' for token in tokens)
+                groups = []
+                for token in tokens:
+                    variants = [token]
+                    if token.endswith("ing") and len(token) > 5:
+                        variants.append(token[:-3])
+                    elif token.endswith("s") and len(token) > 4:
+                        variants.append(token[:-1])
+                    groups.append("(" + " OR ".join(f'"{variant}"' for variant in dict.fromkeys(variants)) + ")")
+                fts_query = " AND ".join(groups)
                 rows = con.execute(
                     """SELECT p.text, d.rel_path, d.title, p.page_no
                        FROM page_fts AS f
@@ -306,8 +325,39 @@ class SearchIndex:
                        WHERE page_fts MATCH ?
                        ORDER BY bm25(page_fts)
                        LIMIT ?""",
-                    (fts_query, limit),
+                    (fts_query, max(limit * 8, 32)),
                 ).fetchall()
+                if not rows and len(tokens) > 1:
+                    fts_query = " OR ".join(f'"{token}"' for token in tokens)
+                    rows = con.execute(
+                        """SELECT p.text, d.rel_path, d.title, p.page_no
+                           FROM page_fts AS f
+                           JOIN pages AS p ON p.rowid = f.rowid
+                           JOIN documents AS d ON d.id = p.document_id
+                           WHERE page_fts MATCH ?
+                           ORDER BY bm25(page_fts)
+                           LIMIT ?""",
+                        (fts_query, max(limit * 8, 32)),
+                    ).fetchall()
+                def relevance(row: sqlite3.Row) -> tuple[int, float]:
+                    haystack = f"{row[1] or ''} {row[2] or ''} {row[0] or ''}".lower()
+                    body = str(row[0] or "").lower()
+                    score = sum(body.count(token) for token in tokens)
+                    title_path = f"{row[1] or ''} {row[2] or ''}".lower()
+                    score += sum(4 for token in tokens if token in title_path)
+                    if len(tokens) > 1 and all(token in body for token in tokens):
+                        score += 8
+                    positions = [body.find(token) for token in tokens if body.find(token) >= 0]
+                    if len(positions) > 1:
+                        score += max(0, 18 - (max(positions) - min(positions)) // 80)
+                    medical_intent = {"cut", "cuts", "wound", "wounds", "bleed", "bleeding", "injury", "injuries", "first", "aid", "bandage"}
+                    medical_hints = ("first aid", "medical", "doctor", "emergency", "wound", "health", "bandage", "injur", "medicine", "surgery")
+                    if medical_intent.intersection(tokens) and any(hint in title_path for hint in medical_hints):
+                        score += 32
+                    elif medical_intent.intersection(tokens):
+                        score -= 15
+                    return score, -len(haystack)
+                rows = sorted(rows, key=relevance, reverse=True)[:limit]
                 return [{
                     "text": self._snippet(str(row[0] or ""), tokens),
                     "source_filename": Path(str(row[1] or "")).name or str(row[2] or "unknown"),
