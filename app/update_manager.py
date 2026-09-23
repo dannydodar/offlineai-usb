@@ -92,6 +92,7 @@ def apply_update() -> dict[str, Any]:
         "start_usb.ps1", "start_usb.cmd",
         "stop_usb.ps1", "stop_usb.cmd",
         "offload_models.ps1",
+        "start_offlineai.sh", "stop_offlineai.sh", "install_offlineai_desktop.sh", "README-LINUX.md",
     }
     allow_dirs = {"app", "ui", "worker-pdf"}
     try:

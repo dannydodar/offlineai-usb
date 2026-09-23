@@ -137,7 +137,10 @@ def load_model_registry() -> dict[str, Any]:
             model = dict(item)
             if os.getenv("OFFLINEAI_MODEL_POLICY", "").strip().lower() == "lightweight" and model.get("id") != LIGHTWEIGHT_MODEL:
                 continue
-            local_file = Path(str(model.get("local_model_file", "")))
+            # The registry is shared with the Windows package, where the
+            # recorded paths use backslashes.  Normalize them before joining
+            # on Linux so the lightweight model is discovered correctly.
+            local_file = Path(str(model.get("local_model_file", "")).replace("\\\\", "/"))
             resolved = local_file if local_file.is_absolute() else MODEL_FOLDER / local_file
             model["local_path"] = str(resolved)
             model["available"] = resolved.exists()
@@ -371,4 +374,8 @@ class LMStudioClient:
 
 
 def load_system_prompt() -> str:
-    return (ROOT / "system_prompt.txt").read_text(encoding="utf-8")
+    prompt = (ROOT / "system_prompt.txt").read_text(encoding="utf-8")
+    # Keep the prompt portable: the Windows package uses E:\\PDF while the
+    # Linux bundle points at its mounted USB/PDF directory.
+    library_root = os.getenv("OFFLINEAI_PDF_ROOT", "E:\\PDF")
+    return prompt.replace("E:\\PDF", library_root)
