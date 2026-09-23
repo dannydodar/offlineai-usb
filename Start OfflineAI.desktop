@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Start OfflineAI
+Comment=Start the local OfflineAI assistant
+Exec=/bin/sh -c "exec /bin/bash \"$(dirname %k)/start_offlineai.sh\""
+Icon=utilities-terminal
+Terminal=false
+Categories=Utility;

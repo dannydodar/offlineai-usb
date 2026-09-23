@@ -6,7 +6,11 @@ connection after the package and model have been copied to the laptop.
 
 ## First run
 
-Open a terminal in this folder and run:
+Double-click `Start OfflineAI.desktop` in this folder. If antiX asks whether
+to trust or execute it, choose **Trust and Launch**.
+
+If the file manager opens it as text instead, open a terminal in this folder
+and run:
 
 ```sh
 bash ./start_offlineai.sh
