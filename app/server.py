@@ -88,8 +88,10 @@ def _restart_launcher() -> None:
         launcher = ROOT / "start_offlineai.sh"
         if not launcher.is_file():
             raise RuntimeError("Linux launcher not found; restart OfflineAI manually")
-        command = ["bash", str(launcher), "--port", port]
-        subprocess.Popen(command, cwd=str(ROOT), stdin=subprocess.DEVNULL,
+        command = ["bash", str(launcher), "--port", port, "--no-browser"]
+        child_env = os.environ.copy()
+        child_env["OFFLINEAI_OPEN_BROWSER"] = "0"
+        subprocess.Popen(command, cwd=str(ROOT), env=child_env, stdin=subprocess.DEVNULL,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                          close_fds=True, start_new_session=True)
         return
@@ -104,7 +106,7 @@ def _restart_launcher() -> None:
     if not supports_qwen:
         raise RuntimeError("the USB launcher is too old to restart lightweight mode; install the latest update and relaunch OfflineAI")
     model = "qwen3"
-    command = ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(launcher), "-Model", model, "-Port", port]
+    command = ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(launcher), "-Model", model, "-Port", port, "-NoBrowser"]
     flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
     subprocess.Popen(command, cwd=str(ROOT), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                      stderr=subprocess.DEVNULL, close_fds=True, creationflags=flags)

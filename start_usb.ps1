@@ -2,7 +2,8 @@ param(
     [ValidateSet('auto','e2b','e4b','qwen3')]
     [string]$Model = 'qwen3',
     [int]$Port = 8765,
-    [switch]$NoOffload
+    [switch]$NoOffload,
+    [switch]$NoBrowser
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -158,5 +159,5 @@ if (-not $backendReady) {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stopScript -Quiet
     throw 'Portable OfflineAI backend did not become healthy with the selected model.'
 }
-Start-Process "http://127.0.0.1:$Port/"
+if (-not $NoBrowser) { Start-Process "http://127.0.0.1:$Port/" }
 Write-Output "Portable OfflineAI started at http://127.0.0.1:$Port/ using $Model through independent llama.cpp; model source: $modelLocation."

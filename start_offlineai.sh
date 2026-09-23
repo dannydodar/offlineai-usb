@@ -6,7 +6,7 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PYTHON="${OFFLINEAI_PYTHON:-python3}"
 PORT="${OFFLINEAI_PORT:-8765}"
 RUNNER_PORT="${OFFLINEAI_RUNNER_PORT:-1235}"
-OPEN_BROWSER=1
+OPEN_BROWSER="${OFFLINEAI_OPEN_BROWSER:-1}"
 RUNTIME_VERSION="b10936"
 MODEL_ID="qwen/qwen3-0.6b"
 MODEL_FILE="Qwen3-0.6B-Q4_0.gguf"
@@ -169,6 +169,16 @@ for candidate in "$ROOT/../../PDF" "$ROOT/../PDF" "$ROOT/PDF"; do
     if [ -d "$candidate" ]; then PDF_ROOT="$candidate"; break; fi
 done
 DB_PATH="$ROOT/worker-pdf/pdf_catalog.sqlite3"
+
+# The catalog is deliberately not stored in GitHub because it can be very
+# large. Build it locally from the user's PDF folder when an installation or
+# update does not have one yet.
+if [ ! -f "$DB_PATH" ]; then
+    [ -d "$PDF_ROOT" ] || die "the PDF library folder was not found at $PDF_ROOT; create it and add PDFs, then restart OfflineAI"
+    echo "Building the local PDF catalog (first run only)…"
+    OFFLINEAI_PDF_ROOT="$PDF_ROOT" OFFLINEAI_INDEX_DIR="$ROOT/worker-pdf" \
+        "$PYTHON" "$ROOT/worker-pdf/build_catalog.py" || die "could not build the PDF catalog; see $LOG_ROOT/restart.log"
+fi
 
 export OFFLINEAI_PORT="$PORT"
 export OFFLINEAI_LM_BASE="http://127.0.0.1:$RUNNER_PORT/v1"
