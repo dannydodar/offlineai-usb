@@ -41,6 +41,7 @@
     debugCopyButton: document.querySelector('#debugCopyButton'),
     quickUpdateButton: document.querySelector('#quickUpdateButton'),
     quickUpdateStatus: document.querySelector('#quickUpdateStatus'),
+    clearTopButton: document.querySelector('#clearTopButton'),
     hardwareNotice: document.querySelector('#hardwareNotice'),
     modelDownloadPanel: document.querySelector('#modelDownloadPanel'),
     downloadModelButton: document.querySelector('#downloadModelButton'),
@@ -705,11 +706,21 @@
   els.contextQuickSelect?.addEventListener('change', () => { els.parameterInputs.maxContextTokens.value = els.contextQuickSelect.value; updateContextMeter(); });
   els.libraryQuick.addEventListener('change', () => { els.library.checked = els.libraryQuick.checked; });
   els.library.addEventListener('change', () => { els.libraryQuick.checked = els.library.checked; });
-  els.clear.addEventListener('click', () => { state.messages = []; state.context = null; save(); showError(''); render(); });
+  const clearConversation = () => {
+    if (state.messages.length && !window.confirm('Clear this conversation and reset its context?')) return;
+    state.messages = [];
+    state.context = null;
+    save();
+    showError('');
+    if (els.performance) els.performance.textContent = '';
+    render();
+  };
+  els.clear.addEventListener('click', clearConversation);
   els.settingsButton.addEventListener('click', () => { const open = els.settingsPanel.hidden; els.settingsPanel.hidden = !open; els.settingsButton.setAttribute('aria-expanded', String(open)); });
   els.debugButton?.addEventListener('click', runDebug);
   els.debugCopyButton?.addEventListener('click', copyDebugSummary);
   els.quickUpdateButton?.addEventListener('click', quickUpdate);
+  els.clearTopButton?.addEventListener('click', clearConversation);
   els.checkUpdatesButton.addEventListener('click', checkUpdates);
   els.applyUpdateButton.addEventListener('click', applyUpdate);
   els.restartButton?.addEventListener('click', restartOfflineAI);

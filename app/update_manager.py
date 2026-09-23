@@ -134,6 +134,16 @@ def apply_update() -> dict[str, Any]:
                         shutil.copy2(target, backup_target)
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(source_file, target)
+            # Do not report a successful update if the files that fix the
+            # local runner handshake were not actually installed. This turns
+            # a partial or stale archive into a visible update failure rather
+            # than leaving the user with an apparently updated but broken app.
+            backend_text = (ROOT / "app" / "rag_backend.py").read_text(encoding="utf-8")
+            ui_text = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+            if "def runner_model_id" not in backend_text:
+                raise RuntimeError("the update did not install the local runner fix")
+            if "clearTopButton" not in ui_text:
+                raise RuntimeError("the update did not install the current user interface")
         return {**checked, "ok": True, "applied": True, "restartRequired": True, "message": "Update installed. Restart OfflineAI to load it."}
     except (OSError, urllib.error.URLError, TimeoutError, zipfile.BadZipFile, RuntimeError) as exc:
         return {**checked, "ok": False, "applied": False, "message": f"Update failed: {exc}"}

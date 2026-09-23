@@ -144,7 +144,10 @@ def load_model_registry() -> dict[str, Any]:
         entries = [dict(QWEN_MODEL_SPEC)]
     models = []
     for model in entries:
-        local_file = Path(str(model.get("local_model_file", "")).replace("\\\\", "/"))
+        # Registry files are shared with Windows, where relative paths are
+        # commonly written with backslashes. On Linux a backslash is a normal
+        # filename character, so normalize both platforms here.
+        local_file = Path(str(model.get("local_model_file", "")).replace("\\", "/"))
         resolved = local_file if local_file.is_absolute() else MODEL_FOLDER / local_file
         model["local_path"] = str(resolved)
         model["available"] = resolved.is_file()
@@ -158,7 +161,7 @@ def configured_model(model_id: str) -> dict[str, Any]:
         if item.get("id") != requested:
             continue
         model = dict(item)
-        local_file = Path(str(model.get("local_model_file", "")).replace("\\\\", "/"))
+        local_file = Path(str(model.get("local_model_file", "")).replace("\\", "/"))
         model["local_path"] = str((MODEL_FOLDER / local_file).resolve())
         model["available"] = Path(model["local_path"]).is_file()
         return model
@@ -333,6 +336,28 @@ class LMStudioClient:
         except Exception as exc:
             return {"data": [], "offline": True, "error": str(exc)}
 
+    def runner_model_id(self, preferred: str) -> str:
+        """Return the model identifier accepted by the local OpenAI endpoint.
+
+        llama.cpp can expose the model filename even when ``--alias`` was
+        supplied. Sending the friendly application ID then produces the
+        opaque ``unsupported model, choose one of ...`` error. This Linux
+        package intentionally runs one model only, so a single reported
+        runner model is safe to use as the API ID.
+        """
+        payload = self._request("GET", "/models")
+        entries = payload.get("data", []) if isinstance(payload, dict) else []
+        ids = [str(item.get("id", "")).strip() for item in entries
+               if isinstance(item, dict) and str(item.get("id", "")).strip()]
+        if preferred in ids:
+            return preferred
+        if len(ids) == 1:
+            return ids[0]
+        if not ids:
+            raise RuntimeError("local runner reports no loaded model")
+        available = ", ".join(ids[:4])
+        raise RuntimeError(f"local runner model ID mismatch; available: {available}")
+
     def chat(self, model: str, message: str, context: list[dict[str, Any]], system_prompt: str,
              history: list[dict[str, Any]] | None = None, temperature: float = 0.2,
              top_p: float = 0.9, max_output_tokens: int = 700,
@@ -347,7 +372,8 @@ class LMStudioClient:
         if history:
             messages.extend(history[-8:])
         messages.append({"role": "user", "content": f"Retrieved sources:\n{joined or '(none)'}\n\nQuestion:\n{message}"})
-        payload = {"model": model, "messages": messages, "temperature": temperature,
+        api_model = self.runner_model_id(model)
+        payload = {"model": api_model, "messages": messages, "temperature": temperature,
                    "top_p": top_p, "max_tokens": max_output_tokens, "stream": False,
                    "chat_template_kwargs": {"enable_thinking": bool(thinking)}}
         result = self._request("POST", "/chat/completions", payload, timeout_seconds=timeout_seconds)
