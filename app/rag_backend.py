@@ -142,7 +142,7 @@ def load_model_registry() -> dict[str, Any]:
             # is briefly stale (for example after an update or first-run
             # copy). Keep Qwen selectable rather than presenting an empty
             # model list and falling back to an unavailable default.
-            if model["available"] or (os.getenv("OFFLINEAI_MODEL_POLICY", "").strip().lower() == "lightweight" and model.get("id") == LIGHTWEIGHT_MODEL):
+            if model["available"] or model.get("id") == LIGHTWEIGHT_MODEL:
                 models.append(model)
         return {"folder": str(MODEL_FOLDER), "models": models}
     except (OSError, json.JSONDecodeError) as exc:
@@ -150,10 +150,16 @@ def load_model_registry() -> dict[str, Any]:
 
 
 def configured_model(model_id: str) -> dict[str, Any]:
-    for model in load_model_registry()["models"]:
-        if model.get("id") == model_id:
-            return model
-    raise ValueError(f"unsupported model; choose one of: {', '.join(m['id'] for m in load_model_registry()['models'])}")
+    requested = str(model_id or "").strip()
+    for item in load_model_registry()["models"]:
+        if item.get("id") != requested:
+            continue
+        model = dict(item)
+        local_file = Path(str(model.get("local_model_file", "")).replace("\\\\", "/"))
+        model["local_path"] = str((MODEL_FOLDER / local_file).resolve())
+        model["available"] = Path(model["local_path"]).is_file()
+        return model
+    raise ValueError(f"unsupported model; the installed build only supports {LIGHTWEIGHT_MODEL}")
 
 
 def context_accounting(system_prompt: str, history: list[dict[str, Any]], context: list[dict[str, Any]],

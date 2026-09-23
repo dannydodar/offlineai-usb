@@ -207,16 +207,10 @@ class Handler(BaseHTTPRequestHandler):
             message = str(body.get("message", "")).strip()
             if not message:
                 raise ValueError("message is required")
-            requested_model = str(body.get("model") or "").strip()
-            active_model = os.getenv("OFFLINEAI_ACTIVE_MODEL", "").strip()
-            runtime = runtime_status()
-            running_model = str(runtime.get("model") or "").strip()
-            model = requested_model or active_model or running_model or DEFAULT_MODEL
-            if (os.getenv("OFFLINEAI_MODEL_POLICY", "").strip().lower() == "lightweight"
-                    or active_model == LIGHTWEIGHT_MODEL or running_model == LIGHTWEIGHT_MODEL):
-                # A stale browser selection must never reactivate a heavier
-                # model on a constrained Linux laptop.
-                model = LIGHTWEIGHT_MODEL
+            # This installation is intentionally Qwen-only. Ignore stale
+            # browser/model IDs entirely so chat cannot fail in registry
+            # validation before it reaches the local runner.
+            model = LIGHTWEIGHT_MODEL
             model_config = configured_model(model)
             parameters = body.get("parameters", {})
             if not isinstance(parameters, dict):
