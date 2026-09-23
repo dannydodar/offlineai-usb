@@ -23,7 +23,7 @@ QWEN_MODEL_SPEC = {
     "default_generation": {"temperature": 0.7, "top_p": 0.8, "max_output_tokens": 384},
 }
 LM_BASE = os.getenv("OFFLINEAI_LM_BASE", "http://127.0.0.1:1234/v1").rstrip("/")
-DEFAULT_DB = Path(os.getenv("OFFLINEAI_DB_PATH", str(ROOT.parent / "data" / "documents.db")))
+DEFAULT_DB = Path(os.getenv("OFFLINEAI_DB_PATH", str(ROOT.parent / "worker-pdf" / "pdf_catalog.sqlite3")))
 MAX_CONTEXT_CHARS = int(os.getenv("OFFLINEAI_MAX_CONTEXT_CHARS", "9000"))
 MODEL_FOLDER = Path(os.getenv("OFFLINEAI_MODEL_FOLDER", str(ROOT.parent / "models"))).expanduser().resolve()
 CONVERSATIONAL_MESSAGES = {
@@ -193,11 +193,49 @@ class SearchIndex:
     """
 
     def __init__(self, db_path: str | Path = DEFAULT_DB):
-        self.db_path = Path(db_path)
+        self.requested_db_path = Path(db_path)
+        self.db_path = self._resolve_catalog_path(self.requested_db_path)
+
+    @staticmethod
+    def _case_insensitive_path(path: Path) -> Path | None:
+        """Resolve an existing path when a Linux package has case-only drift."""
+        if not path.is_absolute():
+            path = Path.cwd() / path
+        current = Path(path.anchor)
+        for part in path.parts[1:]:
+            if not current.exists() or not current.is_dir():
+                return None
+            exact = current / part
+            if exact.exists():
+                current = exact
+                continue
+            matches = [item for item in current.iterdir() if item.name.casefold() == part.casefold()]
+            if len(matches) != 1:
+                return None
+            current = matches[0]
+        return current if current.is_file() else None
+
+    @classmethod
+    def _resolve_catalog_path(cls, configured: Path) -> Path:
+        if configured.is_file():
+            return configured
+        tolerant = cls._case_insensitive_path(configured)
+        if tolerant:
+            return tolerant
+        # If a stale environment variable points outside this package, prefer
+        # the catalog shipped beside the backend before reporting it missing.
+        packaged = ROOT.parent / "worker-pdf" / "pdf_catalog.sqlite3"
+        if packaged.is_file():
+            return packaged
+        tolerant_packaged = cls._case_insensitive_path(packaged)
+        return tolerant_packaged or configured
 
     def _connect(self) -> sqlite3.Connection:
         if not self.db_path.exists():
-            raise FileNotFoundError(f"index database not found: {self.db_path}")
+            raise FileNotFoundError(
+                f"index database not found: {self.db_path}; expected the PDF worker catalog at "
+                f"{ROOT.parent / 'worker-pdf' / 'pdf_catalog.sqlite3'}"
+            )
         con = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True)
         con.row_factory = sqlite3.Row
         return con

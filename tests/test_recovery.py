@@ -78,6 +78,17 @@ class RecoveryTests(unittest.TestCase):
                 (entry / 'cmdline').write_bytes(b'python3\0' + str(target).encode() + b'.unrelated\0')
                 self.assertFalse(linux_recovery.owned_process(987654, {target}, proc))
 
+    def test_catalog_path_case_drift_is_recovered(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            actual_dir = root / 'worker-pdf'
+            actual_dir.mkdir()
+            actual_db = actual_dir / 'pdf_catalog.sqlite3'
+            actual_db.touch()
+            configured = root / 'worker-PDF' / 'PDF_catalog.sqlite3'
+            resolved = server.SearchIndex._resolve_catalog_path(configured)
+            self.assertEqual(resolved, actual_db)
+
     def test_chat_and_debug_over_http(self):
         class Runner(BaseHTTPRequestHandler):
             def do_GET(self):

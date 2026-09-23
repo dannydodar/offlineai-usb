@@ -177,6 +177,7 @@ class Handler(BaseHTTPRequestHandler):
                              "engine": os.getenv("OFFLINEAI_ENGINE", "LM Studio API"),
                              "active_model": os.getenv("OFFLINEAI_ACTIVE_MODEL", ""),
                              "backend_build": BACKEND_BUILD, "runner": runtime_status(), "database": str(index.db_path),
+                         "database_configured": str(index.requested_db_path),
                              "library": os.getenv("OFFLINEAI_PDF_ROOT", "E:\\PDF")})
         elif route == "/debug":
             self._send(200, _debug_report())
