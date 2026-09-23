@@ -14,6 +14,13 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent
 LIGHTWEIGHT_MODEL = "qwen/qwen3-0.6b"
 DEFAULT_MODEL = LIGHTWEIGHT_MODEL
+QWEN_MODEL_SPEC = {
+    "id": LIGHTWEIGHT_MODEL,
+    "label": "Qwen3 0.6B (super-light)",
+    "local_model_file": "qwen3-0.6b/Qwen3-0.6B-Q4_0.gguf",
+    "context_window": 2048,
+    "default_generation": {"temperature": 0.7, "top_p": 0.8, "max_output_tokens": 384},
+}
 LM_BASE = os.getenv("OFFLINEAI_LM_BASE", "http://127.0.0.1:1234/v1").rstrip("/")
 DEFAULT_DB = Path(os.getenv("OFFLINEAI_DB_PATH", str(ROOT.parent / "data" / "documents.db")))
 MAX_CONTEXT_CHARS = int(os.getenv("OFFLINEAI_MAX_CONTEXT_CHARS", "9000"))
@@ -122,31 +129,27 @@ def retrieval_decision(message: str) -> tuple[bool, str]:
 
 
 def load_model_registry() -> dict[str, Any]:
+    """Return the single model supported by this Linux installation.
+
+    Qwen is built in deliberately.  A stale, missing, or partially updated
+    model_registry.json must not make a running Qwen service appear empty.
+    """
     path = ROOT / "model_registry.json"
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        models = []
-        for item in data.get("models", []):
-            model = dict(item)
-            if os.getenv("OFFLINEAI_MODEL_POLICY", "").strip().lower() == "lightweight" and model.get("id") != LIGHTWEIGHT_MODEL:
-                continue
-            # The registry is shared with the Windows package, where the
-            # recorded paths use backslashes.  Normalize them before joining
-            # on Linux so the lightweight model is discovered correctly.
-            local_file = Path(str(model.get("local_model_file", "")).replace("\\\\", "/"))
-            resolved = local_file if local_file.is_absolute() else MODEL_FOLDER / local_file
-            model["local_path"] = str(resolved)
-            model["available"] = resolved.exists()
-            # In lightweight mode the runner is the source of truth.  It may
-            # have loaded the model into the PC cache while the registry path
-            # is briefly stale (for example after an update or first-run
-            # copy). Keep Qwen selectable rather than presenting an empty
-            # model list and falling back to an unavailable default.
-            if model["available"] or model.get("id") == LIGHTWEIGHT_MODEL:
-                models.append(model)
-        return {"folder": str(MODEL_FOLDER), "models": models}
-    except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError(f"model registry unavailable: {exc}") from exc
+        entries = [dict(item) for item in data.get("models", []) if item.get("id") == LIGHTWEIGHT_MODEL]
+    except (OSError, json.JSONDecodeError):
+        entries = []
+    if not entries:
+        entries = [dict(QWEN_MODEL_SPEC)]
+    models = []
+    for model in entries:
+        local_file = Path(str(model.get("local_model_file", "")).replace("\\\\", "/"))
+        resolved = local_file if local_file.is_absolute() else MODEL_FOLDER / local_file
+        model["local_path"] = str(resolved)
+        model["available"] = resolved.is_file()
+        models.append(model)
+    return {"folder": str(MODEL_FOLDER), "models": models}
 
 
 def configured_model(model_id: str) -> dict[str, Any]:
