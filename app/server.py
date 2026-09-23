@@ -214,8 +214,11 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("message is required")
             requested_model = str(body.get("model") or "").strip()
             active_model = os.getenv("OFFLINEAI_ACTIVE_MODEL", "").strip()
-            model = requested_model or active_model or DEFAULT_MODEL
-            if os.getenv("OFFLINEAI_MODEL_POLICY", "").strip().lower() == "lightweight":
+            runtime = runtime_status()
+            running_model = str(runtime.get("model") or "").strip()
+            model = requested_model or active_model or running_model or DEFAULT_MODEL
+            if (os.getenv("OFFLINEAI_MODEL_POLICY", "").strip().lower() == "lightweight"
+                    or active_model == LIGHTWEIGHT_MODEL or running_model == LIGHTWEIGHT_MODEL):
                 # A stale browser selection must never reactivate a heavier
                 # model on a constrained Linux laptop.
                 model = LIGHTWEIGHT_MODEL

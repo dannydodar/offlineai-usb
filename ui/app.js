@@ -133,7 +133,10 @@
       const backend = await request(endpoint(state.config.configPath || '/api/config'));
       state.config = { ...state.config, ...backend };
       if (backend.system_prompt) state.config.systemPrompt = backend.system_prompt;
-      if (Array.isArray(backend.models)) state.config.localModels = backend.models;
+      // Do not erase the bundled lightweight model list when an older or
+      // briefly stale backend returns an empty inventory.  That empty list
+      // otherwise leaves the selector blank and makes chat omit its model.
+      if (Array.isArray(backend.models) && backend.models.length) state.config.localModels = backend.models;
       if (Array.isArray(backend.downloadable_models)) state.config.downloadableModels = backend.downloadable_models;
     } catch (_) {}
   }
@@ -425,7 +428,11 @@
   }
 
   function loadConfiguredModels() {
-    const models = state.config.localModels || [];
+    const models = (state.config.localModels && state.config.localModels.length)
+      ? state.config.localModels
+      : (state.config.model_policy === 'lightweight'
+        ? [{ id: 'qwen/qwen3-0.6b', label: 'Qwen3 0.6B (super-light)' }]
+        : []);
     els.model.innerHTML = '';
     if (!models.length) {
       els.model.add(new Option('No configured local models', ''));
