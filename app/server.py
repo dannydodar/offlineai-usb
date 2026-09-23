@@ -139,7 +139,7 @@ class Handler(BaseHTTPRequestHandler):
         if not path.exists() or not path.is_file() or UI_ROOT.resolve() not in resolved.parents:
             self._send(404, {"error": "not found"})
             return
-        content_types = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8"}
+        content_types = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml", ".webp": "image/webp"}
         raw = path.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", content_types.get(path.suffix.lower(), "application/octet-stream"))
@@ -172,6 +172,8 @@ class Handler(BaseHTTPRequestHandler):
         if route in {"", "/", "/index.html"}:
             self._send_file(UI_ROOT / "index.html")
         elif route in {"/styles.css", "/app.js", "/config.json"}:
+            self._send_file(UI_ROOT / route.lstrip("/"))
+        elif route.startswith("/assets/"):
             self._send_file(UI_ROOT / route.lstrip("/"))
         elif route == "/health":
             self._send(200, {"ok": True, "service": "offlineai-backend", "bind": HOST,

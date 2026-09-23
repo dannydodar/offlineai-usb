@@ -120,6 +120,10 @@ class RecoveryTests(unittest.TestCase):
                 self.assertEqual(request('/api/config')['models'][0]['id'], 'qwen/qwen3-0.6b')
                 self.assertTrue(request('/api/debug')['ok'])
                 self.assertEqual(request('/api/chat', {'message': 'Hi', 'searchLibrary': False})['answer'], 'OK')
+                with urllib.request.urlopen(base + '/assets/old-logo.png', timeout=5) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(response.headers.get_content_type(), 'image/png')
+                    self.assertGreater(int(response.headers['Content-Length']), 0)
         finally:
             for service in (backend, runner):
                 service.shutdown()

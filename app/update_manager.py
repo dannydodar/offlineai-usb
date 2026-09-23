@@ -17,6 +17,7 @@ VERSION_FILE = ROOT / "version.json"
 UPDATE_CONFIG = ROOT / "update_config.json"
 CA_BUNDLE = Path(__file__).resolve().parent / "cacert.pem"
 REQUIRED_BACKEND_BUILD = "runner-diagnostics-v2"
+REQUIRED_UI_ASSETS = ("ui/assets/old-logo.png",)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -67,13 +68,22 @@ def backend_repair_required() -> bool:
         return True
 
 
+def ui_asset_repair_required() -> bool:
+    """Detect an installed UI that lost a required bundled asset."""
+    return any(not (ROOT / relative).is_file() or (ROOT / relative).stat().st_size <= 0
+               for relative in REQUIRED_UI_ASSETS)
+
+
 def check_updates() -> dict[str, Any]:
     config = _config()
     current = current_version()
     repository = config["repository"]
-    repair_required = backend_repair_required()
+    backend_repair = backend_repair_required()
+    asset_repair = ui_asset_repair_required()
+    repair_required = backend_repair or asset_repair
     result: dict[str, Any] = {"currentVersion": current, "repository": repository, "branch": config["branch"],
-                               "backendRepairRequired": repair_required, "updateAvailable": repair_required}
+                               "backendRepairRequired": backend_repair, "uiAssetRepairRequired": asset_repair,
+                               "updateAvailable": repair_required}
     if not repository:
         result.update({"ok": False, "message": "Update repository is not configured yet."})
         return result
@@ -83,7 +93,7 @@ def check_updates() -> dict[str, Any]:
         latest = str(remote.get("version", "0.0.0"))
         newer = _version_tuple(latest) > _version_tuple(current)
         result.update({"ok": True, "latestVersion": latest, "updateAvailable": newer or repair_required,
-                       "message": "Backend repair required." if repair_required else "Update check complete."})
+                       "message": "Backend repair required." if backend_repair else ("UI asset repair required." if asset_repair else "Update check complete.")})
         return result
     except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
         result.update({"ok": False, "message": f"Update check failed: {exc}"})
@@ -125,6 +135,9 @@ def apply_update() -> dict[str, Any]:
             if len(roots) != 1:
                 raise RuntimeError("Update archive has an unexpected layout.")
             source_root = roots[0]
+            for relative in REQUIRED_UI_ASSETS:
+                if not (source_root / relative).is_file():
+                    raise RuntimeError(f"Update archive is missing required asset: {relative}")
             backup_root.mkdir(parents=True, exist_ok=True)
             for name in allow_files:
                 source = source_root / name
@@ -174,6 +187,11 @@ def apply_update() -> dict[str, Any]:
                 raise RuntimeError("the update did not install the local runner fix")
             if "clearButton" not in ui_text:
                 raise RuntimeError("the update did not install the current Dangle user interface")
+            for relative in REQUIRED_UI_ASSETS:
+                target = ROOT / relative
+                source = source_root / relative
+                if not target.is_file() or target.stat().st_size != source.stat().st_size:
+                    raise RuntimeError(f"the update did not install required asset: {relative}")
             # Publish the installed version only after all application files
             # have been copied and verified.
             shutil.copy2(VERSION_FILE, backup_root / 'version.json')
