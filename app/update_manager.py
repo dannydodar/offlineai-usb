@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 VERSION_FILE = ROOT / "version.json"
 UPDATE_CONFIG = ROOT / "update_config.json"
 CA_BUNDLE = Path(__file__).resolve().parent / "cacert.pem"
+REQUIRED_BACKEND_BUILD = "runner-diagnostics-v2"
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -53,11 +54,22 @@ def current_version() -> str:
         return "0.0.0"
 
 
+def backend_repair_required() -> bool:
+    """Detect a partial update even when version.json was already replaced."""
+    try:
+        backend = (ROOT / "app" / "rag_backend.py").read_text(encoding="utf-8")
+        return f'BACKEND_BUILD = "{REQUIRED_BACKEND_BUILD}"' not in backend
+    except OSError:
+        return True
+
+
 def check_updates() -> dict[str, Any]:
     config = _config()
     current = current_version()
     repository = config["repository"]
-    result: dict[str, Any] = {"currentVersion": current, "repository": repository, "branch": config["branch"], "updateAvailable": False}
+    repair_required = backend_repair_required()
+    result: dict[str, Any] = {"currentVersion": current, "repository": repository, "branch": config["branch"],
+                               "backendRepairRequired": repair_required, "updateAvailable": repair_required}
     if not repository:
         result.update({"ok": False, "message": "Update repository is not configured yet."})
         return result
@@ -65,7 +77,9 @@ def check_updates() -> dict[str, Any]:
         raw_url = f"https://raw.githubusercontent.com/{repository}/{config['branch']}/version.json"
         remote = json.loads(_fetch(raw_url).decode("utf-8"))
         latest = str(remote.get("version", "0.0.0"))
-        result.update({"ok": True, "latestVersion": latest, "updateAvailable": _version_tuple(latest) > _version_tuple(current), "message": "Update check complete."})
+        newer = _version_tuple(latest) > _version_tuple(current)
+        result.update({"ok": True, "latestVersion": latest, "updateAvailable": newer or repair_required,
+                       "message": "Backend repair required." if repair_required else "Update check complete."})
         return result
     except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
         result.update({"ok": False, "message": f"Update check failed: {exc}"})
@@ -140,7 +154,7 @@ def apply_update() -> dict[str, Any]:
             # than leaving the user with an apparently updated but broken app.
             backend_text = (ROOT / "app" / "rag_backend.py").read_text(encoding="utf-8")
             ui_text = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
-            if "BACKEND_BUILD = \"runner-diagnostics-v2\"" not in backend_text or "def runner_model_id" not in backend_text:
+            if f'BACKEND_BUILD = "{REQUIRED_BACKEND_BUILD}"' not in backend_text or "def runner_model_id" not in backend_text:
                 raise RuntimeError("the update did not install the local runner fix")
             if "clearTopButton" not in ui_text:
                 raise RuntimeError("the update did not install the current user interface")

@@ -666,14 +666,14 @@
         await new Promise(resolve => window.setTimeout(resolve, 1000));
         try {
           const health = await request(endpoint('/api/health'));
-          if (!previousInstance || health.instance_id !== previousInstance) {
+          if ((!previousInstance || health.instance_id !== previousInstance) && health.backend_build === 'runner-diagnostics-v2') {
             button.textContent = 'Updated';
             window.setTimeout(() => window.location.reload(), 500);
             return;
           }
         } catch (_) {}
       }
-      throw new Error('the new service did not become ready');
+      throw new Error('the updated backend did not become ready; it may still be running an older copy');
     } catch (error) {
       button.disabled = false;
       button.textContent = 'Update';
@@ -698,7 +698,7 @@
         await new Promise(resolve => window.setTimeout(resolve, 1000));
         try {
           const health = await request(endpoint('/api/health'));
-          if (!previousInstance || health.instance_id !== previousInstance) {
+          if ((!previousInstance || health.instance_id !== previousInstance) && health.backend_build === 'runner-diagnostics-v2') {
             els.updateStatus.textContent = 'OfflineAI restarted successfully. Refreshing…';
             window.setTimeout(() => window.location.reload(), 500);
             return;
@@ -709,7 +709,7 @@
         }
       }
       throw new Error(sawServiceStop
-        ? 'the old service stopped but the new service did not become ready'
+        ? 'the old service stopped but the required backend build did not become ready'
         : 'the old service did not shut down');
     } catch (error) {
       els.restartButton.disabled = false;
