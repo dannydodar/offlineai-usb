@@ -540,10 +540,36 @@
     if (els.debugStatus) els.debugStatus.textContent = 'Running local checks…';
     els.debugOutput.textContent = 'Running local diagnostic…\nThis may take a few seconds while the CPU model answers a tiny test.';
     try {
-      const result = await request(endpoint('/api/debug'));
-      els.debugOutput.textContent = result.summary || 'No diagnostic summary was returned.';
-      if (els.debugCopyButton) els.debugCopyButton.disabled = !result.summary;
-      if (els.debugStatus) els.debugStatus.textContent = result.ok ? 'All local checks passed.' : 'A local check failed. Copy or read the short summary above.';
+      const lines = [];
+      let passed = true;
+      let health = null;
+      let config = null;
+      try {
+        health = await request(endpoint('/api/health'));
+        const runner = health.runner || {};
+        if (runner.running) lines.push(`Runner: OK (${runner.model || 'local runner responded'})`);
+        else { passed = false; lines.push(`Runner: FAIL (${String(runner.error || 'not responding').slice(0, 150)})`); }
+      } catch (error) { passed = false; lines.push(`Runner: FAIL (${error.message.slice(0, 150)})`); }
+      try {
+        config = await request(endpoint('/api/config'));
+        const models = Array.isArray(config.models) ? config.models : (config.localModels || []);
+        const qwen = models.find(model => modelId(model) === 'qwen/qwen3-0.6b');
+        if (qwen) lines.push(`Model: Qwen3 configured${qwen.available === false ? ' (file not visible)' : ''}`);
+        else { passed = false; lines.push('Model: FAIL (Qwen3 is not in the backend registry)'); }
+      } catch (error) { passed = false; lines.push(`Model: FAIL (${error.message.slice(0, 150)})`); }
+      try {
+        await request(endpoint('/api/chat'), {
+          method: 'POST',
+          body: JSON.stringify({ message: 'Reply with exactly OK.', model: 'qwen/qwen3-0.6b', thinking: false, searchLibrary: false,
+            parameters: { temperature: 0.7, topP: 0.8, maxOutputTokens: 1, maxContextTokens: 512, retrievalLimit: 0 }, history: [] })
+        });
+        lines.push('Chat probe: OK (Qwen answered locally)');
+      } catch (error) { passed = false; lines.push(`Chat probe: FAIL (${error.message.slice(0, 180)})`); }
+      const version = config?.version || state.config.version || 'unknown';
+      const summary = [`OfflineAI v${version}`, ...lines].join('\n');
+      els.debugOutput.textContent = summary;
+      if (els.debugCopyButton) els.debugCopyButton.disabled = false;
+      if (els.debugStatus) els.debugStatus.textContent = passed ? 'All local checks passed.' : 'A local check failed. Copy or read the short summary above.';
     } catch (error) {
       els.debugOutput.textContent = `Debug request failed: ${error.message}`;
       if (els.debugStatus) els.debugStatus.textContent = 'The diagnostic endpoint could not be reached.';
