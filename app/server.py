@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from rag_backend import (DEFAULT_MODEL, LMStudioClient, SearchIndex, configured_model,
-                         context_accounting, hardware_profile, load_model_registry,
+                         LIGHTWEIGHT_MODEL, context_accounting, hardware_profile, load_model_registry,
                          load_system_prompt, retrieval_decision)
 from model_download import catalog as model_download_catalog, start_download, status as model_download_status
 from model_manager import delete_model, inventory as model_inventory, runtime_status
@@ -212,7 +212,13 @@ class Handler(BaseHTTPRequestHandler):
             message = str(body.get("message", "")).strip()
             if not message:
                 raise ValueError("message is required")
-            model = body.get("model", DEFAULT_MODEL)
+            requested_model = str(body.get("model") or "").strip()
+            active_model = os.getenv("OFFLINEAI_ACTIVE_MODEL", "").strip()
+            model = requested_model or active_model or DEFAULT_MODEL
+            if os.getenv("OFFLINEAI_MODEL_POLICY", "").strip().lower() == "lightweight":
+                # A stale browser selection must never reactivate a heavier
+                # model on a constrained Linux laptop.
+                model = LIGHTWEIGHT_MODEL
             model_config = configured_model(model)
             parameters = body.get("parameters", {})
             if not isinstance(parameters, dict):

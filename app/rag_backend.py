@@ -18,7 +18,7 @@ LIGHTWEIGHT_MODEL = "qwen/qwen3-0.6b"
 LM_BASE = os.getenv("OFFLINEAI_LM_BASE", "http://127.0.0.1:1234/v1").rstrip("/")
 DEFAULT_DB = Path(os.getenv("OFFLINEAI_DB_PATH", str(ROOT.parent / "data" / "documents.db")))
 MAX_CONTEXT_CHARS = int(os.getenv("OFFLINEAI_MAX_CONTEXT_CHARS", "9000"))
-MODEL_FOLDER = Path(os.getenv("OFFLINEAI_MODEL_FOLDER", str(ROOT.parent / "models")))
+MODEL_FOLDER = Path(os.getenv("OFFLINEAI_MODEL_FOLDER", str(ROOT.parent / "models"))).expanduser().resolve()
 CONVERSATIONAL_MESSAGES = {
     "hi", "hello", "hey", "hiya", "how are you", "thanks", "thank you",
     "who are you", "what can you do", "help", "good morning", "good afternoon",
