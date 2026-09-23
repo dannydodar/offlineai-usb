@@ -15,6 +15,7 @@
       </div>
       <div class="top-actions">
         <div id="serviceStatus" class="status status-unknown" role="status"><span></span> Checking service…</div>
+        <button id="debugButton" class="button secondary" type="button" aria-expanded="false" aria-controls="debugPanel">Debug</button>
         <button id="settingsButton" class="button secondary" type="button" aria-expanded="false" aria-controls="settingsPanel">Settings</button>
       </div>
     </header>
@@ -68,6 +69,13 @@
         <button id="clearButton" class="button secondary" type="button">Clear this conversation</button>
         <div class="system-panel"><details><summary>Show the assistant instructions</summary><p class="setting-help">This is the read-only instruction text that guides the local assistant.</p><pre id="systemPrompt">Configured by local backend.</pre></details></div>
       </details>
+    </section>
+
+    <section id="debugPanel" class="debug-panel" hidden aria-label="Local diagnostic">
+      <div class="debug-heading"><strong>Local diagnostic</strong><button id="debugCopyButton" class="button secondary" type="button" disabled>Copy summary</button></div>
+      <p class="setting-help">This checks the installed software, the local runner, the Qwen model, and one tiny local chat request. It does not search PDFs or contact an online AI.</p>
+      <pre id="debugOutput" class="debug-output">Press Debug to run a local test.</pre>
+      <span id="debugStatus" class="setting-help" role="status"></span>
     </section>
 
     <section id="errorBox" class="notice error" hidden role="alert"></section>

@@ -15,7 +15,7 @@ from rag_backend import (DEFAULT_MODEL, LMStudioClient, SearchIndex, configured_
                          load_system_prompt, retrieval_decision)
 from model_download import catalog as model_download_catalog, start_download, status as model_download_status
 from model_manager import delete_model, inventory as model_inventory, runtime_status
-from update_manager import apply_update, check_updates
+from update_manager import apply_update, check_updates, current_version
 
 # The portable assistant is intentionally local-only. Keep the bind address
 # fixed even if a stale environment variable is present on the host laptop.
@@ -28,6 +28,50 @@ index = SearchIndex()
 lm = LMStudioClient()
 INSTANCE_ID = uuid.uuid4().hex
 STARTED_AT = time.time()
+
+
+def _short_debug_error(value: object, limit: int = 180) -> str:
+    clean = " ".join(str(value or "").split())
+    return clean[:limit] + ("…" if len(clean) > limit else "")
+
+
+def _debug_report() -> dict:
+    """Return a compact, user-readable local diagnostic instead of a log dump."""
+    lines = [f"OfflineAI v{current_version()}"]
+    passed = True
+    runtime = runtime_status()
+    runner_model = str(runtime.get("model") or "").strip()
+    if runtime.get("running"):
+        lines.append(f"Runner: OK ({runner_model or 'local runner responded'})")
+    else:
+        passed = False
+        lines.append(f"Runner: FAIL ({_short_debug_error(runtime.get('error') or 'not responding')})")
+
+    try:
+        registry = load_model_registry()
+        models = registry.get("models", [])
+        qwen = next((item for item in models if item.get("id") == LIGHTWEIGHT_MODEL), None)
+        if qwen:
+            file_state = "file present" if qwen.get("available") else "file not visible to backend"
+            lines.append(f"Model: Qwen3 configured ({file_state})")
+        else:
+            passed = False
+            lines.append("Model: FAIL (Qwen3 missing from registry)")
+    except Exception as exc:
+        passed = False
+        lines.append(f"Model: FAIL ({_short_debug_error(exc)})")
+
+    if runtime.get("running"):
+        try:
+            lm.chat(LIGHTWEIGHT_MODEL, "Reply with exactly OK.", [], "Reply with exactly OK.",
+                    max_output_tokens=1, max_context_tokens=512, thinking=False, timeout_seconds=30)
+            lines.append("Chat probe: OK (Qwen answered locally)")
+        except Exception as exc:
+            passed = False
+            lines.append(f"Chat probe: FAIL ({_short_debug_error(exc)})")
+    else:
+        lines.append("Chat probe: SKIPPED (runner failed above)")
+    return {"ok": passed, "summary": "\n".join(lines)}
 
 
 def _restart_launcher() -> None:
@@ -127,6 +171,8 @@ class Handler(BaseHTTPRequestHandler):
                              "active_model": os.getenv("OFFLINEAI_ACTIVE_MODEL", ""),
                              "runner": runtime_status(), "database": str(index.db_path),
                              "library": os.getenv("OFFLINEAI_PDF_ROOT", "E:\\PDF")})
+        elif route == "/debug":
+            self._send(200, _debug_report())
         elif route == "/models":
             # Expose only the intentionally configured local model registry.
             self._send(200, load_model_registry())

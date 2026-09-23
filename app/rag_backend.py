@@ -333,7 +333,8 @@ class LMStudioClient:
     def chat(self, model: str, message: str, context: list[dict[str, Any]], system_prompt: str,
              history: list[dict[str, Any]] | None = None, temperature: float = 0.2,
              top_p: float = 0.9, max_output_tokens: int = 700,
-             max_context_tokens: int = 2048, thinking: bool = True) -> dict[str, Any]:
+             max_context_tokens: int = 2048, thinking: bool = True,
+             timeout_seconds: int | None = None) -> dict[str, Any]:
         blocks = []
         for i, item in enumerate(context, 1):
             citation = f"filename={item['source_filename'] or 'unknown'}; relative_path={item['relative_path'] or 'unknown'}; pdf_page={item['pdf_page'] if item['pdf_page'] is not None else 'unknown'}"
@@ -346,7 +347,7 @@ class LMStudioClient:
         payload = {"model": model, "messages": messages, "temperature": temperature,
                    "top_p": top_p, "max_tokens": max_output_tokens, "stream": False,
                    "chat_template_kwargs": {"enable_thinking": bool(thinking)}}
-        result = self._request("POST", "/chat/completions", payload)
+        result = self._request("POST", "/chat/completions", payload, timeout_seconds=timeout_seconds)
         try:
             message_result = result["choices"][0]["message"]
             raw_answer = str(message_result.get("content") or "")
@@ -361,11 +362,13 @@ class LMStudioClient:
             raise RuntimeError("LM Studio returned a malformed chat response") from exc
         return result
 
-    def _request(self, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _request(self, method: str, path: str, payload: dict[str, Any] | None = None,
+                 timeout_seconds: int | None = None) -> dict[str, Any]:
         data = json.dumps(payload).encode() if payload is not None else None
         req = urllib.request.Request(self.base_url + path, data=data, method=method, headers={"Content-Type": "application/json"})
         try:
-            with urllib.request.urlopen(req, timeout=180 if method == "POST" else 8) as response:
+            timeout = timeout_seconds if timeout_seconds is not None else (180 if method == "POST" else 8)
+            with urllib.request.urlopen(req, timeout=timeout) as response:
                 parsed = json.loads(response.read().decode("utf-8"))
                 if not isinstance(parsed, dict):
                     raise RuntimeError("LM Studio returned non-object JSON")

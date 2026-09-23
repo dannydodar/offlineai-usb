@@ -34,6 +34,11 @@
     versionBadge: document.querySelector('#versionBadge'),
     settingsButton: document.querySelector('#settingsButton'),
     settingsPanel: document.querySelector('#settingsPanel'),
+    debugButton: document.querySelector('#debugButton'),
+    debugPanel: document.querySelector('#debugPanel'),
+    debugOutput: document.querySelector('#debugOutput'),
+    debugStatus: document.querySelector('#debugStatus'),
+    debugCopyButton: document.querySelector('#debugCopyButton'),
     hardwareNotice: document.querySelector('#hardwareNotice'),
     modelDownloadPanel: document.querySelector('#modelDownloadPanel'),
     downloadModelButton: document.querySelector('#downloadModelButton'),
@@ -526,6 +531,43 @@
     } catch (error) { els.updateStatus.textContent = `Update check failed: ${error.message}`; }
   }
 
+  async function runDebug() {
+    if (!els.debugButton || !els.debugPanel || !els.debugOutput) return;
+    els.debugPanel.hidden = false;
+    els.debugButton.setAttribute('aria-expanded', 'true');
+    els.debugButton.disabled = true;
+    if (els.debugCopyButton) els.debugCopyButton.disabled = true;
+    if (els.debugStatus) els.debugStatus.textContent = 'Running local checks…';
+    els.debugOutput.textContent = 'Running local diagnostic…\nThis may take a few seconds while the CPU model answers a tiny test.';
+    try {
+      const result = await request(endpoint('/api/debug'));
+      els.debugOutput.textContent = result.summary || 'No diagnostic summary was returned.';
+      if (els.debugCopyButton) els.debugCopyButton.disabled = !result.summary;
+      if (els.debugStatus) els.debugStatus.textContent = result.ok ? 'All local checks passed.' : 'A local check failed. Copy or read the short summary above.';
+    } catch (error) {
+      els.debugOutput.textContent = `Debug request failed: ${error.message}`;
+      if (els.debugStatus) els.debugStatus.textContent = 'The diagnostic endpoint could not be reached.';
+    } finally {
+      els.debugButton.disabled = false;
+    }
+  }
+
+  async function copyDebugSummary() {
+    if (!els.debugOutput) return;
+    const value = els.debugOutput.textContent || '';
+    try {
+      await navigator.clipboard.writeText(value);
+      if (els.debugStatus) els.debugStatus.textContent = 'Summary copied to the clipboard.';
+    } catch (_) {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(els.debugOutput);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      if (els.debugStatus) els.debugStatus.textContent = 'Clipboard access was unavailable; the summary is selected for copying.';
+    }
+  }
+
   async function applyUpdate() {
     els.updateStatus.textContent = 'Downloading and installing…';
     els.applyUpdateButton.disabled = true;
@@ -582,6 +624,8 @@
   els.library.addEventListener('change', () => { els.libraryQuick.checked = els.library.checked; });
   els.clear.addEventListener('click', () => { state.messages = []; state.context = null; save(); showError(''); render(); });
   els.settingsButton.addEventListener('click', () => { const open = els.settingsPanel.hidden; els.settingsPanel.hidden = !open; els.settingsButton.setAttribute('aria-expanded', String(open)); });
+  els.debugButton?.addEventListener('click', runDebug);
+  els.debugCopyButton?.addEventListener('click', copyDebugSummary);
   els.checkUpdatesButton.addEventListener('click', checkUpdates);
   els.applyUpdateButton.addEventListener('click', applyUpdate);
   els.restartButton?.addEventListener('click', restartOfflineAI);
