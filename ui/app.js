@@ -31,6 +31,7 @@
     status: document.querySelector('#serviceStatus'),
     error: document.querySelector('#errorBox'),
     modelFolder: document.querySelector('#modelFolder'),
+    versionBadge: document.querySelector('#versionBadge'),
     settingsButton: document.querySelector('#settingsButton'),
     settingsPanel: document.querySelector('#settingsPanel'),
     hardwareNotice: document.querySelector('#hardwareNotice'),
@@ -225,6 +226,11 @@
   function applyConfigMetadata(meta = {}) {
     if (meta.system_prompt) state.config.systemPrompt = meta.system_prompt;
     if (meta.systemPrompt) state.config.systemPrompt = meta.systemPrompt;
+    if (meta.version) state.config.version = meta.version;
+    if (els.versionBadge) {
+      els.versionBadge.textContent = state.config.version ? `v${state.config.version}` : 'version unavailable';
+      els.versionBadge.title = state.config.version ? `OfflineAI software version ${state.config.version}` : 'The backend version could not be read';
+    }
     const hardware = meta.hardware || state.config.hardware || {};
     if (meta.hardware) state.config.hardware = meta.hardware;
     const parameters = { ...(state.config.parameters || {}), ...(hardware.parameters || {}), ...(meta.parameters || {}) };
